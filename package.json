@@ -57,6 +57,7 @@
 	"devDependencies": {
 		"@antfu/utils": "^9.2.0",
 		"@core/errorutil": "npm:@jsr/core__errorutil",
+		"@supabase/supabase-js": "^2.39.0",
 		"@hono/mcp": "^0.1.0",
 		"@hono/node-server": "^1.17.1",
 		"@jsr/std__async": "1",
@@ -79,6 +80,7 @@
 		"fs-fixture": "^2.8.1",
 		"gunshi": "^0.26.3",
 		"hono": "^4.8.5",
+		"nanoid": "^5.0.4",
 		"lint-staged": "^16.1.2",
 		"path-type": "^6.0.0",
 		"picocolors": "^1.1.1",
