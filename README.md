@@ -1,24 +1,29 @@
 <div align="center">
     <h1>🚗 CCUsage Live</h1>
-    <p><strong>Enhanced Claude Code usage analysis tool with live team monitoring and collaboration features</strong></p>
+    <p><strong>增强版 Claude Code 使用分析工具，支持实时团队监控和协作功能</strong></p>
 </div>
-
 <p align="center">
     <a href="https://npmjs.com/package/ccusage-live"><img src="https://img.shields.io/npm/v/ccusage-live?color=yellow" alt="npm version" /></a>
     <a href="https://npmjs.com/package/ccusage-live"><img src="https://img.shields.io/npm/dy/ccusage-live" alt="NPM Downloads" /></a>
     <a href="https://packagephobia.com/result?p=ccusage-live"><img src="https://packagephobia.com/badge?p=ccusage-live" alt="install size" /></a>
-    <a href="https://github.com/Calderic/ccusage-live"><img src="https://img.shields.io/github/stars/Calderic/ccusage-live?style=social" alt="GitHub stars" /></a>
+    <a href="https://github.com/Calderic/ccusage_live"><img src="https://img.shields.io/github/stars/Calderic/ccusage_live?style=social" alt="GitHub stars" /></a>
 </p>
 
-> **Analyze your Claude Code usage with powerful team collaboration features — now with live monitoring, team management, and real-time synchronization!**
+<p align="center">
+    <a href="README.md">🇨🇳 中文</a> | <a href="README.en.md">🇺🇸 English</a>
+</p>
 
-Built on top of the excellent [ccusage](https://github.com/ryoppippi/ccusage) by @ryoppippi, this enhanced version adds team collaboration, live monitoring, and advanced management features.
+![image-20250730155401469](https://s2.loli.net/2025/07/30/MUQtJCdg3uBRDAL.png)
 
-## Installation
+> **分析您的 Claude Code 使用情况，提供强大的团队协作功能——现在支持实时监控、团队管理和实时同步！**
 
-### Global Installation (Recommended)
+基于 @ryoppippi 出色的 [ccusage](https://github.com/ryoppippi/ccusage) 构建，这个增强版本添加了团队协作、实时监控和高级管理功能。
 
-Install ccusage-live globally to use it anywhere:
+## 安装
+
+### 全局安装（推荐）
+
+全局安装 ccusage-live 以便在任何地方使用：
 
 ```bash
 # Using npm
@@ -31,9 +36,9 @@ bun install -g ccusage-live
 pnpm install -g ccusage-live
 ```
 
-### Quick Usage Without Installation
+### 无需安装快速使用
 
-You can also run it directly without installation:
+您也可以直接运行而无需安装：
 
 ```bash
 # Using bunx (recommended for speed)
@@ -43,205 +48,205 @@ bunx ccusage-live
 npx ccusage-live@latest
 ```
 
-> 💡 **Tip**: We recommend using `bun` for faster installation and execution!
+> 💡 **提示**：我们推荐使用 `bun` 以获得更快的安装和执行速度！
 
-## Usage
+## 使用方法
 
-After installation, you can use either the full command name or the short alias:
+安装后，您可以使用完整的命令名称或简短别名：
 
 ```bash
-# Using full command name
-ccusage-live daily    # Daily token usage and costs
-ccusage-live monthly  # Monthly aggregated report
-ccusage-live session  # Usage by conversation session
-ccusage-live blocks   # 5-hour billing windows
+# 使用完整命令名称
+ccusage-live daily    # 每日 token 使用量和费用
+ccusage-live monthly  # 月度汇总报告
+ccusage-live session  # 按对话会话统计使用量
+ccusage-live blocks   # 5 小时计费窗口
 
-# Using short alias (convenient!)
-ccul daily    # Same as ccusage-live daily
-ccul monthly  # Same as ccusage-live monthly
-ccul session  # Same as ccusage-live session
-ccul blocks   # Same as ccusage-live blocks
+# 使用简短别名（方便！）
+ccul daily    # 等同于 ccusage-live daily
+ccul monthly  # 等同于 ccusage-live monthly
+ccul session  # 等同于 ccusage-live session
+ccul blocks   # 等同于 ccusage-live blocks
 
-# Team collaboration features
-ccul team create "My Team"           # Create a new team
-ccul team join <team-id>             # Join an existing team
-ccul team list                       # List your teams
-ccul team members <team-id>          # Show team members
-ccul team sync                       # Sync usage to team database
+# 团队协作功能
+ccul team create "我的团队"           # 创建新团队
+ccul team join <team-id>             # 加入现有团队
+ccul team list                       # 列出您的团队
+ccul team members <team-id>          # 显示团队成员
+ccul team sync                       # 同步使用数据到团队数据库
 
-# Live monitoring & real-time features
-ccul blocks --active                 # Show active billing block with projections
-ccul blocks --recent                 # Show recent blocks (last 3 days)
-ccul blocks --live                   # Real-time usage dashboard (team mode)
+# 实时监控和实时功能
+ccul blocks --active                 # 显示活跃计费区块和预测
+ccul blocks --recent                 # 显示最近区块（最近 3 天）
+ccul blocks --live                   # 实时使用仪表板（团队模式）
 
-# Advanced options
-ccul daily --json                    # JSON output
-ccul daily --mode calculate         # Force cost calculation
-ccul monthly --since 2025-01-01     # Date filtering
-ccul session --project myproject    # Filter by project
+# 高级选项
+ccul daily --json                    # JSON 输出
+ccul daily --mode calculate         # 强制成本计算
+ccul monthly --since 2025-01-01     # 日期过滤
+ccul session --project myproject    # 按项目过滤
 
-# MCP Server (for Claude Desktop integration)
-ccul mcp                            # Start MCP server
-ccul mcp --type http --port 8080    # HTTP MCP server
+# MCP 服务器（用于 Claude Desktop 集成）
+ccul mcp                            # 启动 MCP 服务器
+ccul mcp --type http --port 8080    # HTTP MCP 服务器
 ```
 
-## ✨ Enhanced Features
+## ✨ 增强功能
 
-### 🏢 Team Collaboration
+### 🏢 团队协作
 
-- **👥 Team Management**: Create and manage teams with unique identifiers
-- **🔗 Easy Joining**: Join teams using simple team codes
-- **👨‍👩‍👧‍👦 Member Management**: View and manage team members
-- **📊 Centralized Analytics**: Aggregate usage data across team members
-- **🔄 Real-time Sync**: Automatic synchronization with team database
-- **🌐 Web Dashboard**: Browser-based team management interface
+- **👥 团队管理**：使用唯一标识符创建和管理团队
+- **🔗 轻松加入**：使用简单的团队代码加入团队
+- **👨‍👩‍👧‍👦 成员管理**：查看和管理团队成员
+- **📊 集中分析**：汇总团队成员的使用数据
+- **🔄 实时同步**：与团队数据库自动同步
+- **🌐 Web 仪表板**：基于浏览器的团队管理界面
 
-### 📈 Live Monitoring & Real-time Features
+### 📈 实时监控和实时功能
 
-- **⏰ Active Block Tracking**: Monitor current 5-hour billing window progress
-- **🚨 Smart Alerts**: Configurable token threshold warnings
-- **📊 Real-time Dashboard**: Live usage updates with burn rate calculations
-- **💰 Cost Projections**: Predict costs based on current usage patterns
-- **🔄 Auto-refresh**: Continuous monitoring with customizable intervals
+- **⏰ 活跃区块跟踪**：监控当前 5 小时计费窗口进度
+- **🚨 智能警报**：可配置的 token 阈值警告
+- **📊 实时仪表板**：带有消耗率计算的实时使用更新
+- **💰 成本预测**：基于当前使用模式预测成本
+- **🔄 自动刷新**：具有可自定义间隔的持续监控
 
-### 📊 Core Usage Analytics
+### 📊 核心使用分析
 
-- **📅 Daily Reports**: Token usage and costs by date
-- **📆 Monthly Reports**: Aggregated monthly statistics
-- **💬 Session Reports**: Usage grouped by conversation sessions
-- **⏰ 5-Hour Blocks**: Track Claude's billing window usage
-- **🤖 Model Tracking**: Detailed breakdown by Claude model (Sonnet, Opus, etc.)
-- **📊 Cost Analysis**: Precise USD cost tracking with multiple calculation modes
+- **📅 每日报告**：按日期统计 token 使用量和费用
+- **📆 月度报告**：汇总的月度统计
+- **💬 会话报告**：按对话会话分组的使用情况
+- **⏰ 5 小时区块**：跟踪 Claude 的计费窗口使用情况
+- **🤖 模型跟踪**：按 Claude 模型（Sonnet、Opus 等）详细分解
+- **📊 成本分析**：具有多种计算模式的精确美元成本跟踪
 
-### 🛠️ Advanced Features
+### 🛠️ 高级功能
 
-- **🔌 MCP Integration**: Built-in Model Context Protocol server for Claude Desktop
-- **📄 JSON Export**: Structured data output for programmatic usage
-- **📅 Date Filtering**: Flexible date range filtering
-- **🎨 Smart Display**: Responsive tables with automatic compact mode
-- **🌐 Multi-directory Support**: Handle multiple Claude installations
-- **⚡ High Performance**: Optimized for speed with minimal bundle size
+- **🔌 MCP 集成**：为 Claude Desktop 内置的模型上下文协议服务器
+- **📄 JSON 导出**：用于程序化使用的结构化数据输出
+- **📅 日期过滤**：灵活的日期范围过滤
+- **🎨 智能显示**：具有自动紧凑模式的响应式表格
+- **🌐 多目录支持**：处理多个 Claude 安装
+- **⚡ 高性能**：以最小包大小优化速度
 
-### 🔧 Configuration & Setup
+### 🔧 配置和设置
 
-- **🔄 Pre-configured**: Ready-to-use with included server settings
-- **🔧 Environment Variables**: Flexible configuration options
-- **📝 Interactive Setup**: Guided configuration wizard
-- **🔒 Secure**: Built-in validation and error handling
+- **🔄 预配置**：包含服务器设置，开箱即用
+- **🔧 环境变量**：灵活的配置选项
+- **📝 交互式设置**：引导式配置向导
+- **🔒 安全**：内置验证和错误处理
 
-## 🔧 Configuration
+## 🔧 配置
 
-CCUsage Live comes pre-configured with team collaboration features. The package includes default server settings that work out of the box.
+CCUsage Live 预配置了团队协作功能。该包包含开箱即用的默认服务器设置。
 
-### Environment Variables (Optional)
+### 环境变量（可选）
 
-You can override the default configuration using environment variables:
+您可以使用环境变量覆盖默认配置：
 
 ```bash
-# Supabase Configuration
+# Supabase 配置
 export SUPABASE_URL="https://your-project.supabase.co"
 export SUPABASE_ANON_KEY="your-anon-key"
 
-# Feature Controls
-export CCUSAGE_TEAM_MODE="true"      # Enable team features
-export CCUSAGE_WEB_INTERFACE="true"  # Enable web dashboard
-export CCUSAGE_MCP_SERVER="true"     # Enable MCP server
+# 功能控制
+export CCUSAGE_TEAM_MODE="true"      # 启用团队功能
+export CCUSAGE_WEB_INTERFACE="true"  # 启用 Web 仪表板
+export CCUSAGE_MCP_SERVER="true"     # 启用 MCP 服务器
 
-# Usage Analysis
-export CLAUDE_CONFIG_DIR="/custom/path"  # Custom Claude data directory
+# 使用分析
+export CLAUDE_CONFIG_DIR="/custom/path"  # 自定义 Claude 数据目录
 ```
 
-### Cost Calculation Modes
+### 成本计算模式
 
-Control how costs are calculated:
+控制如何计算成本：
 
-- `--mode auto` (default): Use pre-calculated costs when available
-- `--mode calculate`: Always calculate from tokens using model pricing
-- `--mode display`: Use only pre-calculated cost values
+- `--mode auto`（默认）：可用时使用预计算成本
+- `--mode calculate`：始终使用模型定价从 token 计算
+- `--mode display`：仅使用预计算的成本值
 
-### Team Setup
+### 团队设置
 
-1. **Create a team**: `ccul team create "My Team"`
-2. **Share team ID**: Give the team ID to your colleagues
-3. **Join team**: Others run `ccul team join <team-id>`
-4. **Sync data**: Run `ccul team sync` to upload usage data
-5. **Monitor together**: Use `ccul blocks --live` for real-time monitoring
+1. **创建团队**：`ccul team create "我的团队"`
+2. **分享团队 ID**：将团队 ID 给您的同事
+3. **加入团队**：其他人运行 `ccul team join <team-id>`
+4. **同步数据**：运行 `ccul team sync` 上传使用数据
+5. **一起监控**：使用 `ccul blocks --live` 进行实时监控
 
-## 🌐 Web Dashboard
+## 🌐 Web 仪表板
 
-CCUsage Live includes a web-based dashboard for team management:
+CCUsage Live 包含用于团队管理的基于 Web 的仪表板：
 
 ```bash
-# Start the web interface (usually runs on port 3000)
+# 启动 Web 界面（通常在端口 3000 上运行）
 ccul web
 
-# Or access via MCP server
+# 或通过 MCP 服务器访问
 ccul mcp --type http --port 8080
 ```
 
-The web dashboard provides:
+Web 仪表板提供：
 
-- Team overview and member management
-- Real-time usage monitoring
-- Threshold configuration
-- Usage analytics and charts
+- 团队概览和成员管理
+- 实时使用监控
+- 阈值配置
+- 使用分析和图表
 
-## 📋 Requirements
+## 📋 要求
 
-- **Node.js**: Version 20.19.4 or higher
-- **Claude Code**: Any version (supports both `~/.claude` and `~/.config/claude`)
-- **Internet**: Required for team features and cost calculations (offline mode available)
+- **Node.js**：版本 20.19.4 或更高
+- **Claude Code**：任何版本（支持 `~/.claude` 和 `~/.config/claude`）
+- **互联网**：团队功能和成本计算需要（提供离线模式）
 
-## 🚀 Development & Contributing
+## 🚀 开发和贡献
 
-This package is based on the excellent [ccusage](https://github.com/ryoppippi/ccusage) by [@ryoppippi](https://github.com/ryoppippi), with enhanced team collaboration and live monitoring features.
+此包基于 [@ryoppippi](https://github.com/ryoppippi) 出色的 [ccusage](https://github.com/ryoppippi/ccusage)，增强了团队协作和实时监控功能。
 
-### For Publishers
+### 针对发布者
 
-If you're setting up this package for your team, run the configuration script before publishing:
+如果您要为团队设置此包，请在发布前运行配置脚本：
 
 ```bash
-# Configure your Supabase settings
+# 配置您的 Supabase 设置
 node scripts/setup-config.js
 
-# Build and publish
+# 构建和发布
 bun run build
 npm publish
 ```
 
-### Building from Source
+### 从源码构建
 
 ```bash
-# Clone the repository
+# 克隆仓库
 git clone https://github.com/Calderic/ccusage-live.git
 cd ccusage-live
 
-# Install dependencies
+# 安装依赖
 bun install
 
-# Build the project
+# 构建项目
 bun run build
 
-# Run tests
+# 运行测试
 bun run test
 
-# Start development
+# 开始开发
 bun run start daily
 ```
 
-## 🙏 Acknowledgments
+## 🙏 致谢
 
-- **[@ryoppippi](https://github.com/ryoppippi)** - Creator of the original [ccusage](https://github.com/ryoppippi/ccusage)
-- **Claude Code Community** - For the excellent CLI tool and community support
-- **All Contributors** - Thanks to everyone who helped improve this tool
+- **[@ryoppippi](https://github.com/ryoppippi)** - 原始 [ccusage](https://github.com/ryoppippi/ccusage) 的创作者
+- **Claude Code 社区** - 提供出色的 CLI 工具和社区支持
+- **所有贡献者** - 感谢所有帮助改进此工具的人
 
-## 📄 License
+## 📄 许可证
 
 [MIT](LICENSE) © [Calderic](https://github.com/Calderic)
 
 ---
 
 <div align="center">
-    <p><strong>Built with ❤️ for the Claude Code community</strong></p>
-    <p>If you find this tool helpful, please ⭐ star the repository!</p>
+    <p><strong>为 Claude Code 社区用 ❤️ 构建</strong></p>
+    <p>如果您觉得此工具有帮助，请 ⭐ 给仓库点个星！</p>
 </div>
