@@ -1,84 +1,85 @@
 {
-  "name": "ccusage-live",
-  "version": "1.0.3",
-  "description": "Enhanced Claude Code usage analysis tool with live team monitoring and collaboration features",
-  "keywords": [
-    "claude",
-    "usage",
-    "monitoring",
-    "team",
-    "collaboration",
-    "cli",
-    "analytics"
-  ],
-  "homepage": "https://github.com/Calderic/ccusage-live#readme",
-  "bugs": {
-    "url": "https://github.com/Calderic/ccusage-live/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Calderic/ccusage-live.git"
-  },
-  "license": "MIT",
-  "author": "Calderic",
-  "type": "module",
-  "exports": {
-    ".": "./dist/index.js",
-    "./calculate-cost": "./dist/calculate-cost.js",
-    "./data-loader": "./dist/data-loader.js",
-    "./debug": "./dist/debug.js",
-    "./logger": "./dist/logger.js",
-    "./mcp": "./dist/mcp.js",
-    "./pricing-fetcher": "./dist/pricing-fetcher.js",
-    "./package.json": "./package.json"
-  },
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "bin": {
-    "ccul": "./dist/index.js",
-    "ccusage-live": "./dist/index.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "CHANGELOG.md"
-  ],
-  "scripts": {
-    "build": "tsdown",
-    "format": "eslint --fix .",
-    "mcp": "bun run ./src/mcp.ts",
-    "release": "bun run format && bun typecheck && bun run test && bun run build && bumpp",
-    "start": "bun run ./src/index.ts",
-    "test": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@antfu/utils": "^9.2.0",
-    "@hono/mcp": "^0.1.0",
-    "@hono/node-server": "^1.17.1",
-    "@modelcontextprotocol/sdk": "^1.17.0",
-    "@praha/byethrow": "^0.6.2",
-    "@supabase/supabase-js": "^2.39.0",
-    "ansi-escapes": "^7.0.0",
-    "cli-table3": "^0.6.5",
-    "consola": "^3.4.2",
-    "es-toolkit": "^1.39.8",
-    "fast-sort": "^3.4.1",
-    "gunshi": "^0.26.3",
-    "hono": "^4.8.5",
-    "nanoid": "^5.0.4",
-    "path-type": "^6.0.0",
-    "picocolors": "^1.1.1",
-    "pretty-ms": "^9.2.0",
-    "prompts": "^2.4.2",
-    "string-width": "^7.2.0",
-    "tinyglobby": "^0.2.14",
-    "type-fest": "^4.41.0",
-    "xdg-basedir": "^5.1.0",
-    "zod": "^3.25.67"
-  },
-  "engines": {
-    "node": ">=20.19.4"
-  }
+	"name": "ccusage-live",
+	"version": "1.0.7",
+	"description": "Enhanced Claude Code usage analysis tool with live team monitoring and collaboration features",
+	"keywords": [
+		"claude",
+		"usage",
+		"monitoring",
+		"team",
+		"collaboration",
+		"cli",
+		"analytics"
+	],
+	"homepage": "https://github.com/Calderic/ccusage-live#readme",
+	"bugs": {
+		"url": "https://github.com/Calderic/ccusage-live/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Calderic/ccusage-live.git"
+	},
+	"license": "MIT",
+	"author": "Calderic",
+	"type": "module",
+	"exports": {
+		".": "./dist/index.js",
+		"./calculate-cost": "./dist/calculate-cost.js",
+		"./data-loader": "./dist/data-loader.js",
+		"./debug": "./dist/debug.js",
+		"./logger": "./dist/logger.js",
+		"./mcp": "./dist/mcp.js",
+		"./pricing-fetcher": "./dist/pricing-fetcher.js",
+		"./update-checker": "./dist/update-checker.js",
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"bin": {
+		"ccul": "./dist/index.js",
+		"ccusage-live": "./dist/index.js"
+	},
+	"files": [
+		"CHANGELOG.md",
+		"README.md",
+		"dist"
+	],
+	"scripts": {
+		"build": "tsdown",
+		"format": "eslint --fix .",
+		"mcp": "bun run ./src/mcp.ts",
+		"release": "bun run format && bun typecheck && bun run test && bun run build && bumpp",
+		"start": "bun run ./src/index.ts",
+		"test": "vitest",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@antfu/utils": "^9.2.0",
+		"@hono/mcp": "^0.1.0",
+		"@hono/node-server": "^1.17.1",
+		"@modelcontextprotocol/sdk": "^1.17.0",
+		"@praha/byethrow": "^0.6.2",
+		"@supabase/supabase-js": "^2.39.0",
+		"ansi-escapes": "^7.0.0",
+		"cli-table3": "^0.6.5",
+		"consola": "^3.4.2",
+		"es-toolkit": "^1.39.8",
+		"fast-sort": "^3.4.1",
+		"gunshi": "^0.26.3",
+		"hono": "^4.8.5",
+		"nanoid": "^5.0.4",
+		"path-type": "^6.0.0",
+		"picocolors": "^1.1.1",
+		"pretty-ms": "^9.2.0",
+		"prompts": "^2.4.2",
+		"string-width": "^7.2.0",
+		"tinyglobby": "^0.2.14",
+		"type-fest": "^4.41.0",
+		"xdg-basedir": "^5.1.0",
+		"zod": "^3.25.67"
+	},
+	"engines": {
+		"node": ">=20.19.4"
+	}
 }

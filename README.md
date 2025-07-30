@@ -88,21 +88,24 @@ ccul mcp --type http --port 8080    # HTTP MCP server
 ## ✨ Enhanced Features
 
 ### 🏢 Team Collaboration
+
 - **👥 Team Management**: Create and manage teams with unique identifiers
-- **🔗 Easy Joining**: Join teams using simple team codes 
+- **🔗 Easy Joining**: Join teams using simple team codes
 - **👨‍👩‍👧‍👦 Member Management**: View and manage team members
 - **📊 Centralized Analytics**: Aggregate usage data across team members
 - **🔄 Real-time Sync**: Automatic synchronization with team database
 - **🌐 Web Dashboard**: Browser-based team management interface
 
 ### 📈 Live Monitoring & Real-time Features
+
 - **⏰ Active Block Tracking**: Monitor current 5-hour billing window progress
 - **🚨 Smart Alerts**: Configurable token threshold warnings
-- **📊 Real-time Dashboard**: Live usage updates with burn rate calculations  
+- **📊 Real-time Dashboard**: Live usage updates with burn rate calculations
 - **💰 Cost Projections**: Predict costs based on current usage patterns
 - **🔄 Auto-refresh**: Continuous monitoring with customizable intervals
 
 ### 📊 Core Usage Analytics
+
 - **📅 Daily Reports**: Token usage and costs by date
 - **📆 Monthly Reports**: Aggregated monthly statistics
 - **💬 Session Reports**: Usage grouped by conversation sessions
@@ -111,6 +114,7 @@ ccul mcp --type http --port 8080    # HTTP MCP server
 - **📊 Cost Analysis**: Precise USD cost tracking with multiple calculation modes
 
 ### 🛠️ Advanced Features
+
 - **🔌 MCP Integration**: Built-in Model Context Protocol server for Claude Desktop
 - **📄 JSON Export**: Structured data output for programmatic usage
 - **📅 Date Filtering**: Flexible date range filtering
@@ -119,6 +123,7 @@ ccul mcp --type http --port 8080    # HTTP MCP server
 - **⚡ High Performance**: Optimized for speed with minimal bundle size
 
 ### 🔧 Configuration & Setup
+
 - **🔄 Pre-configured**: Ready-to-use with included server settings
 - **🔧 Environment Variables**: Flexible configuration options
 - **📝 Interactive Setup**: Guided configuration wizard
@@ -157,7 +162,7 @@ Control how costs are calculated:
 ### Team Setup
 
 1. **Create a team**: `ccul team create "My Team"`
-2. **Share team ID**: Give the team ID to your colleagues  
+2. **Share team ID**: Give the team ID to your colleagues
 3. **Join team**: Others run `ccul team join <team-id>`
 4. **Sync data**: Run `ccul team sync` to upload usage data
 5. **Monitor together**: Use `ccul blocks --live` for real-time monitoring
@@ -175,6 +180,7 @@ ccul mcp --type http --port 8080
 ```
 
 The web dashboard provides:
+
 - Team overview and member management
 - Real-time usage monitoring
 - Threshold configuration
@@ -225,7 +231,7 @@ bun run start daily
 
 ## 🙏 Acknowledgments
 
-- **[@ryoppippi](https://github.com/ryoppippi)** - Creator of the original [ccusage](https://github.com/ryoppippi/ccusage) 
+- **[@ryoppippi](https://github.com/ryoppippi)** - Creator of the original [ccusage](https://github.com/ryoppippi/ccusage)
 - **Claude Code Community** - For the excellent CLI tool and community support
 - **All Contributors** - Thanks to everyone who helped improve this tool
 

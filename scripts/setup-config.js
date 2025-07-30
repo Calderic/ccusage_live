@@ -89,7 +89,7 @@ async function setupConfig() {
 	console.log('🎯 下一步：运行 bun run build && npm publish 发布包');
 }
 
-setupConfig().catch(error => {
+setupConfig().catch((error) => {
 	console.error('❌ 配置设置失败:', error);
 	process.exit(1);
 });

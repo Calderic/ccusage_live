@@ -9,27 +9,6 @@
 import type { SessionBlock } from './_session-blocks.ts';
 import type { TerminalManager } from './_terminal-utils.ts';
 import type { CostMode, SortOrder } from './_types.ts';
-/**
- * Simple delay function with abort signal support
- */
-function delay(ms: number, options?: { signal?: AbortSignal }): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const timeout = setTimeout(resolve, ms);
-		
-		if (options?.signal) {
-			if (options.signal.aborted) {
-				clearTimeout(timeout);
-				reject(new Error('Operation was aborted'));
-				return;
-			}
-			
-			options.signal.addEventListener('abort', () => {
-				clearTimeout(timeout);
-				reject(new Error('Operation was aborted'));
-			});
-		}
-	});
-}
 import * as ansiEscapes from 'ansi-escapes';
 import pc from 'picocolors';
 import prettyMs from 'pretty-ms';
@@ -39,6 +18,27 @@ import { calculateBurnRate, projectBlockUsage } from './_session-blocks.ts';
 import { centerText, createProgressBar } from './_terminal-utils.ts';
 import { getTotalTokens } from './_token-utils.ts';
 import { formatCurrency, formatModelsDisplay, formatNumber } from './_utils.ts';
+/**
+ * Simple delay function with abort signal support
+ */
+async function delay(ms: number, options?: { signal?: AbortSignal }): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const timeout = setTimeout(resolve, ms);
+
+		if (options?.signal) {
+			if (options.signal.aborted) {
+				clearTimeout(timeout);
+				reject(new Error('Operation was aborted'));
+				return;
+			}
+
+			options.signal.addEventListener('abort', () => {
+				clearTimeout(timeout);
+				reject(new Error('Operation was aborted'));
+			});
+		}
+	});
+}
 
 /**
  * Get rate indicator (HIGH/MODERATE/NORMAL) based on burn rate

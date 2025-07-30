@@ -26,7 +26,7 @@ type SupabaseConfig = {
  */
 function getSupabaseConfig(): Result.Result<SupabaseConfig, string> {
 	const config = getConfig();
-	
+
 	// 验证配置
 	const validation = validateConfig(config);
 	if (!validation.valid) {

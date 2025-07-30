@@ -299,8 +299,8 @@ if (import.meta.vitest != null) {
 			expect(monitor.getStatus().syncEnabled).toBe(true);
 		});
 
-		it('should validate config correctly', () => {
-			const validConfig = createRecommendedConfig('test-user');
+		it('should validate config correctly', async () => {
+			const validConfig = await createRecommendedConfig('test-user');
 			const result = validateMonitorConfig(validConfig);
 			expect(Result.isSuccess(result)).toBe(true);
 		});
@@ -311,11 +311,11 @@ if (import.meta.vitest != null) {
 			expect(Result.isFailure(result)).toBe(true);
 		});
 
-		it('should create recommended config', () => {
-			const config = createRecommendedConfig('test-user', 'test-team');
-			expect(config.userName).toBe('test-user');
-			expect(config.teamName).toBe('test-team');
-			expect(config.enableSync).toBe(true);
+		it('should create recommended config', async () => {
+			const validConfig = await createRecommendedConfig('test-user', 'test-team');
+			expect(validConfig.userName).toBe('test-user');
+			expect(validConfig.teamName).toBe('test-team');
+			expect(validConfig.enableSync).toBe(true);
 		});
 	});
 }

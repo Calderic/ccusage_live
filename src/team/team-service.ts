@@ -18,7 +18,8 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import { Result } from '@praha/byethrow';
 import { nanoid } from 'nanoid';
-import { getClaudePaths, loadSessionBlockData } from '../data-loader.ts';
+import { getTotalTokens } from '../_token-utils.ts';
+import { UnifiedSessionSelector } from '../_unified-session-selector.ts';
 import { logger } from '../logger.ts';
 import {
 	createTeamRequestSchema,
@@ -63,9 +64,73 @@ function generateTeamCode(): string {
 }
 
 /**
+ * 缓存条目
+ */
+type CacheEntry<T> = {
+	data: T;
+	timestamp: number;
+	expiresAt: number;
+};
+
+/**
  * 车队服务类
  */
 export class TeamService {
+	private sessionSelector: UnifiedSessionSelector;
+	// 缓存存储
+	private teamInfoCache = new Map<string, CacheEntry<{ team: any; members: any[] }>>();
+	private teammateSessionsCache = new Map<string, CacheEntry<any[]>>();
+
+	// 缓存配置（毫秒）
+	private readonly TEAM_INFO_CACHE_TTL = 5 * 60 * 1000; // 5分钟
+	private readonly TEAMMATE_DATA_CACHE_TTL = 30 * 1000; // 30秒
+
+	constructor() {
+		// 初始化统一会话选择器，确保与原版使用相同的逻辑
+		this.sessionSelector = new UnifiedSessionSelector();
+	}
+
+	/**
+	 * 检查缓存是否有效
+	 */
+	private isCacheValid<T>(entry: CacheEntry<T> | undefined): boolean {
+		if (!entry) { return false; }
+		return Date.now() < entry.expiresAt;
+	}
+
+	/**
+	 * 创建缓存条目
+	 */
+	private createCacheEntry<T>(data: T, ttl: number): CacheEntry<T> {
+		const now = Date.now();
+		return {
+			data,
+			timestamp: now,
+			expiresAt: now + ttl,
+		};
+	}
+
+	/**
+	 * 清理过期缓存
+	 */
+	private cleanupExpiredCache(): void {
+		const now = Date.now();
+
+		// 清理团队信息缓存
+		for (const [key, entry] of this.teamInfoCache.entries()) {
+			if (now >= entry.expiresAt) {
+				this.teamInfoCache.delete(key);
+			}
+		}
+
+		// 清理队友会话缓存
+		for (const [key, entry] of this.teammateSessionsCache.entries()) {
+			if (now >= entry.expiresAt) {
+				this.teammateSessionsCache.delete(key);
+			}
+		}
+	}
+
 	/**
 	 * 创建新车队
 	 */
@@ -302,9 +367,12 @@ export class TeamService {
 	}
 
 	/**
-	 * 获取车队聚合统计数据（混合本地和云端数据）
+	 * 获取车队聚合统计数据（使用分层缓存优化）
 	 */
 	async getTeamStats(teamId: string, currentUserId?: string): Promise<Result.Result<TeamAggregatedStats, string>> {
+		// 清理过期缓存
+		this.cleanupExpiredCache();
+
 		const clientResult = getSupabaseClient();
 		if (Result.isFailure(clientResult)) {
 			return Result.fail(clientResult.error);
@@ -313,109 +381,148 @@ export class TeamService {
 		const supabase = clientResult.value;
 
 		return withRetry(async () => {
-			// 获取车队信息
-			const { data: team, error: teamError } = await supabase
-				.from('teams')
-				.select('*')
-				.eq('id', teamId)
-				.single();
+			// 1. 获取团队基础信息（5分钟缓存）
+			const teamInfoCacheKey = `team-${teamId}`;
+			const teamInfoCache = this.teamInfoCache.get(teamInfoCacheKey);
 
-			if (teamError) {
-				throw new Error(formatSupabaseError(teamError));
+			let team: any, members: any[];
+			if (this.isCacheValid(teamInfoCache)) {
+				// 使用缓存数据
+				({ team, members } = teamInfoCache!.data);
+				logger.debug(`使用团队信息缓存: ${teamId}`);
+			}
+			else {
+				// 从数据库获取
+				const { data: teamData, error: teamError } = await supabase
+					.from('teams')
+					.select('*')
+					.eq('id', teamId)
+					.single();
+
+				if (teamError) {
+					throw new Error(formatSupabaseError(teamError));
+				}
+
+				const { data: membersData, error: membersError } = await supabase
+					.from('team_members')
+					.select('*')
+					.eq('team_id', teamId)
+					.eq('is_active', true);
+
+				if (membersError) {
+					throw new Error(formatSupabaseError(membersError));
+				}
+
+				team = teamData;
+				members = membersData;
+
+				// 更新缓存
+				this.teamInfoCache.set(teamInfoCacheKey, this.createCacheEntry(
+					{ team, members },
+					this.TEAM_INFO_CACHE_TTL,
+				));
+				logger.debug(`更新团队信息缓存: ${teamId}`);
 			}
 
-			// 获取成员列表
-			const { data: members, error: membersError } = await supabase
-				.from('team_members')
-				.select('*')
-				.eq('team_id', teamId)
-				.eq('is_active', true);
+			// 2. 当前会话完全基于本地数据计算（无缓存，实时数据）
+			const currentSession = await this.sessionSelector.getCurrentSession(currentUserId, true);
 
-			if (membersError) {
-				throw new Error(formatSupabaseError(membersError));
+			// 3. 获取队友会话数据（30秒缓存，匹配上传频率）
+			const teammatesCacheKey = `teammates-${teamId}-${currentUserId || 'none'}`;
+			const teammatesCache = this.teammateSessionsCache.get(teammatesCacheKey);
+
+			let teammatesSessions: any[];
+			if (this.isCacheValid(teammatesCache)) {
+				// 使用缓存数据
+				teammatesSessions = teammatesCache!.data;
+				logger.debug(`使用队友数据缓存: ${teamId}`);
+			}
+			else {
+				// 从数据库获取
+				const { data: sessionsData, error: sessionsError } = await supabase
+					.from('usage_sessions')
+					.select('*')
+					.eq('team_id', teamId)
+					.neq('user_id', currentUserId || 'none') // 排除当前用户
+					.order('start_time', { ascending: false });
+
+				if (sessionsError) {
+					throw new Error(formatSupabaseError(sessionsError));
+				}
+
+				teammatesSessions = sessionsData;
+
+				// 更新缓存
+				this.teammateSessionsCache.set(teammatesCacheKey, this.createCacheEntry(
+					teammatesSessions,
+					this.TEAMMATE_DATA_CACHE_TTL,
+				));
+				logger.debug(`更新队友数据缓存: ${teamId}`);
 			}
 
-			// 获取其他成员的活跃使用会话（从数据库）
-			const { data: otherMembersSessions, error: sessionsError } = await supabase
-				.from('usage_sessions')
-				.select('*')
-				.eq('team_id', teamId)
-				.eq('is_active', true) // 只获取活跃的5小时窗口期
-				.neq('user_id', currentUserId || 'none') // 排除当前用户
-				.order('start_time', { ascending: false });
+			// 4. 计算个人和队友统计数据（混合本地和缓存数据）
+			const memberStats = members.map((member: any) => {
+				if (member.user_id === currentUserId) {
+					// 当前用户：使用本地实时数据
+					const personalStats = currentSession
+						? {
+								current_tokens: getTotalTokens(currentSession.tokenCounts),
+								current_cost: currentSession.costUSD,
+								is_active: currentSession.isActive,
+								last_activity: currentSession.actualEndTime || currentSession.startTime,
+							}
+						: {
+								current_tokens: 0,
+								current_cost: 0,
+								is_active: false,
+								last_activity: undefined,
+							};
 
-			if (sessionsError) {
-				throw new Error(formatSupabaseError(sessionsError));
-			}
-
-			// 获取当前用户的本地数据
-			let currentUserSessions: any[] = [];
-			if (currentUserId) {
-				const localDataResult = await this.getCurrentUserLocalData(currentUserId);
-				if (Result.isSuccess(localDataResult)) {
-					currentUserSessions = localDataResult.value;
+					return {
+						user_id: member.user_id,
+						user_name: member.user_name,
+						is_active: personalStats.is_active,
+						current_tokens: personalStats.current_tokens,
+						current_cost: personalStats.current_cost,
+						last_activity: personalStats.last_activity,
+						preferred_time: getPreferredTimeDescription(member.settings.preferred_hours),
+						status_indicator: getMemberStatusIndicator(personalStats.is_active, personalStats.last_activity),
+					};
 				}
 				else {
-					logger.warn(`获取当前用户本地数据失败: ${localDataResult.error}`);
+					// 队友：使用缓存的数据库同步数据
+					const memberSessions = teammatesSessions.filter((s: any) => s.user_id === member.user_id);
+					const totalTokens = memberSessions.reduce((sum: number, s: any) =>
+						sum + (s.token_counts.inputTokens || 0) + (s.token_counts.outputTokens || 0)
+						+ (s.token_counts.cacheCreationInputTokens || 0) + (s.token_counts.cacheReadInputTokens || 0), 0);
+					const totalCost = memberSessions.reduce((sum: number, s: any) => sum + (s.cost_usd || 0), 0);
+					const isActive = memberSessions.some((s: any) => s.is_active);
+					const lastActivity = memberSessions.length > 0
+						? new Date(Math.max(...memberSessions.map((s: any) => new Date(s.updated_at || s.start_time).getTime())))
+						: undefined;
+
+					return {
+						user_id: member.user_id,
+						user_name: member.user_name,
+						is_active: isActive,
+						current_tokens: totalTokens,
+						current_cost: totalCost,
+						last_activity: lastActivity,
+						preferred_time: getPreferredTimeDescription(member.settings.preferred_hours),
+						status_indicator: getMemberStatusIndicator(isActive, lastActivity),
+					};
 				}
-			}
-
-			// 合并所有会话数据
-			const sessions = [...otherMembersSessions, ...currentUserSessions];
-
-			// 查找当前活跃会话
-			const activeSession = sessions.find((s: any) => s.is_active);
-			let currentSession: SessionBlock | null = null;
-
-			if (activeSession) {
-				currentSession = {
-					id: activeSession.session_id,
-					startTime: new Date(activeSession.start_time),
-					endTime: new Date(activeSession.end_time),
-					actualEndTime: new Date(activeSession.end_time),
-					isActive: activeSession.is_active,
-					entries: [], // 实际应用中需要从本地加载
-					tokenCounts: activeSession.token_counts,
-					costUSD: activeSession.cost_usd,
-					models: activeSession.models,
-				};
-			}
-
-			// 计算成员统计
-			const memberStats = members.map((member: any) => {
-				const memberSessions = sessions.filter((s: any) => s.user_id === member.user_id);
-				const totalTokens = memberSessions.reduce((sum: number, s: any) =>
-					sum + s.token_counts.inputTokens + s.token_counts.outputTokens
-					+ s.token_counts.cacheCreationInputTokens + s.token_counts.cacheReadInputTokens, 0);
-				const totalCost = memberSessions.reduce((sum: number, s: any) => sum + s.cost_usd, 0);
-				const isActive = memberSessions.some((s: any) => s.is_active);
-				const lastActivity = memberSessions.length > 0
-					? new Date(Math.max(...memberSessions.map((s: any) => new Date(s.updated_at).getTime())))
-					: undefined;
-
-				return {
-					user_id: member.user_id,
-					user_name: member.user_name,
-					is_active: isActive,
-					current_tokens: totalTokens,
-					current_cost: totalCost,
-					last_activity: lastActivity,
-					preferred_time: getPreferredTimeDescription(member.settings.preferred_hours),
-					status_indicator: getMemberStatusIndicator(isActive, lastActivity),
-				};
 			});
 
-			// 计算总计
-			const totalTokens = sessions.reduce((sum: number, s: any) =>
-				sum + s.token_counts.inputTokens + s.token_counts.outputTokens
-				+ s.token_counts.cacheCreationInputTokens + s.token_counts.cacheReadInputTokens, 0);
-			const totalCost = sessions.reduce((sum: number, s: any) => sum + s.cost_usd, 0);
+			// 5. 计算总计（混合本地和缓存数据）
+			const totalTokens = memberStats.reduce((sum: number, m: any) => sum + m.current_tokens, 0);
+			const totalCost = memberStats.reduce((sum: number, m: any) => sum + m.current_cost, 0);
 			const activeMembersCount = memberStats.filter((m: any) => m.is_active).length;
 
-			// 计算燃烧率（基于活跃会话）
+			// 6. 计算燃烧率（基于当前会话）
 			let burnRate: TeamAggregatedStats['burn_rate'] = null;
-			if (activeSession && currentSession) {
-				const durationMinutes = (new Date().getTime() - new Date(activeSession.start_time).getTime()) / (1000 * 60);
+			if (currentSession && currentSession.isActive) {
+				const durationMinutes = (new Date().getTime() - currentSession.startTime.getTime()) / (1000 * 60);
 				if (durationMinutes > 0) {
 					const tokensPerMinute = totalTokens / durationMinutes;
 					const costPerHour = (totalCost / durationMinutes) * 60;
@@ -432,7 +539,7 @@ export class TeamService {
 				}
 			}
 
-			// 生成智能建议
+			// 7. 生成智能建议（基于混合数据）
 			const smartSuggestions: string[] = [];
 
 			if (burnRate?.indicator === 'HIGH') {
@@ -448,9 +555,9 @@ export class TeamService {
 				smartSuggestions.push(`${highUsageMembers[0].user_name}使用量较高，建议适当控制`);
 			}
 
-			if (currentSession) {
+			if (currentSession && currentSession.isActive) {
 				const remainingTime = (currentSession.endTime.getTime() - new Date().getTime()) / (1000 * 60);
-				if (remainingTime < 60) {
+				if (remainingTime < 60 && remainingTime > 0) {
 					smartSuggestions.push(`预计${Math.round(remainingTime)}分钟后窗口结束，建议提前规划`);
 				}
 			}
@@ -458,8 +565,8 @@ export class TeamService {
 			return {
 				team,
 				members,
-				current_session: currentSession,
-				member_stats: memberStats,
+				current_session: currentSession, // 基于本地数据的实时会话
+				member_stats: memberStats, // 本地实时+队友缓存混合数据
 				total_tokens: totalTokens,
 				total_cost: totalCost,
 				active_members_count: activeMembersCount,
@@ -467,6 +574,44 @@ export class TeamService {
 				smart_suggestions: smartSuggestions,
 			};
 		});
+	}
+
+	/**
+	 * 手动清除指定团队的缓存
+	 */
+	clearTeamCache(teamId: string, currentUserId?: string): void {
+		const teamInfoCacheKey = `team-${teamId}`;
+		const teammatesCacheKey = `teammates-${teamId}-${currentUserId || 'none'}`;
+
+		this.teamInfoCache.delete(teamInfoCacheKey);
+		this.teammateSessionsCache.delete(teammatesCacheKey);
+
+		logger.debug(`清除团队缓存: ${teamId}`);
+	}
+
+	/**
+	 * 获取缓存统计信息
+	 */
+	getCacheStats(): {
+		teamInfoCache: { size: number; entries: Array<{ key: string; expiresAt: Date }> };
+		teammateSessionsCache: { size: number; entries: Array<{ key: string; expiresAt: Date }> };
+	} {
+		return {
+			teamInfoCache: {
+				size: this.teamInfoCache.size,
+				entries: Array.from(this.teamInfoCache.entries()).map(([key, entry]) => ({
+					key,
+					expiresAt: new Date(entry.expiresAt),
+				})),
+			},
+			teammateSessionsCache: {
+				size: this.teammateSessionsCache.size,
+				entries: Array.from(this.teammateSessionsCache.entries()).map(([key, entry]) => ({
+					key,
+					expiresAt: new Date(entry.expiresAt),
+				})),
+			},
+		};
 	}
 
 	/**
@@ -496,57 +641,6 @@ export class TeamService {
 			return true;
 		});
 	}
-
-	/**
-	 * 获取当前用户的本地使用数据（当前5小时窗口期）
-	 * 每次都实时加载使用数据，现在使用全局共享的PricingFetcher来缓存模型价格
-	 */
-	private async getCurrentUserLocalData(userId: string): Promise<Result.Result<any[], string>> {
-		try {
-			const claudePaths = getClaudePaths();
-			if (claudePaths.length === 0) {
-				return Result.fail('未找到 Claude 数据目录');
-			}
-
-			// 加载本地会话数据，现在data-loader.ts内部会使用共享的PricingFetcher实例
-			// 这样可以实时获取token和费用数据，但复用模型价格缓存
-			const blocks = await loadSessionBlockData({
-				claudePath: claudePaths[0], // 使用第一个路径
-				mode: 'auto',
-				order: 'desc',
-			});
-
-			// 找到当前活跃的5小时窗口期
-			const currentActiveBlock = blocks.find(block => block.isActive);
-			if (!currentActiveBlock) {
-				// 如果没有活跃会话，返回空数据
-				return Result.succeed([]);
-			}
-
-			// 只返回当前活跃窗口期的数据
-			const session = {
-				team_id: '', // 这里需要团队ID，但在混合数据时会补充
-				user_id: userId,
-				session_id: currentActiveBlock.id,
-				start_time: currentActiveBlock.startTime.toISOString(),
-				end_time: currentActiveBlock.endTime.toISOString(),
-				is_active: currentActiveBlock.isActive,
-				token_counts: currentActiveBlock.tokenCounts,
-				cost_usd: currentActiveBlock.costUSD,
-				models: currentActiveBlock.models,
-				created_at: new Date().toISOString(),
-				updated_at: new Date().toISOString(),
-				// 标记为本地数据
-				_isLocalData: true,
-			};
-
-			return Result.succeed([session]);
-		}
-		catch (error) {
-			const errorMsg = error instanceof Error ? error.message : String(error);
-			return Result.fail(`获取本地数据失败: ${errorMsg}`);
-		}
-	}
 }
 
 /**
@@ -556,10 +650,8 @@ export const teamService = new TeamService();
 
 if (import.meta.vitest != null) {
 	describe('车队服务', () => {
-		let service: TeamService;
-
 		beforeEach(() => {
-			service = new TeamService();
+			// Test setup
 		});
 
 		it('应该生成有效的用户ID', () => {
