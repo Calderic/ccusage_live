@@ -5,10 +5,12 @@
  * 包括错误处理和类型安全的数据访问。
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { Result } from '@praha/byethrow';
-import process from 'node:process';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './_team-types.ts';
+import process from 'node:process';
+import { Result } from '@praha/byethrow';
+import { createClient } from '@supabase/supabase-js';
+import { getConfig, validateConfig } from '../config/default-config.ts';
 import { logger } from '../logger.ts';
 
 /**
@@ -20,21 +22,21 @@ type SupabaseConfig = {
 };
 
 /**
- * 从环境变量获取 Supabase 配置
+ * 获取 Supabase 配置（优先环境变量，fallback到预设配置）
  */
-function getSupabaseConfig(): Result<SupabaseConfig, string> {
-	const url = process.env.SUPABASE_URL;
-	const anonKey = process.env.SUPABASE_ANON_KEY;
-
-	if (!url) {
-		return Result.failure('SUPABASE_URL 环境变量未设置');
+function getSupabaseConfig(): Result.Result<SupabaseConfig, string> {
+	const config = getConfig();
+	
+	// 验证配置
+	const validation = validateConfig(config);
+	if (!validation.valid) {
+		return Result.fail(`配置验证失败: ${validation.errors.join(', ')}`);
 	}
 
-	if (!anonKey) {
-		return Result.failure('SUPABASE_ANON_KEY 环境变量未设置');
-	}
-
-	return Result.success({ url, anonKey });
+	return Result.succeed({
+		url: config.supabase.url,
+		anonKey: config.supabase.anonKey,
+	});
 }
 
 /**
@@ -46,20 +48,20 @@ let supabaseClient: SupabaseClient<Database> | null = null;
  * 获取 Supabase 客户端实例
  * @returns Supabase 客户端或错误信息
  */
-export function getSupabaseClient(): Result<SupabaseClient<Database>, string> {
+export function getSupabaseClient(): Result.Result<SupabaseClient<Database>, string> {
 	if (supabaseClient) {
-		return Result.success(supabaseClient);
+		return Result.succeed(supabaseClient);
 	}
 
 	const configResult = getSupabaseConfig();
 	if (Result.isFailure(configResult)) {
-		return Result.failure(`Supabase配置错误: ${configResult.error}`);
+		return Result.fail(`Supabase配置错误: ${configResult.error}`);
 	}
 
 	try {
 		supabaseClient = createClient<Database>(
-			configResult.data.url,
-			configResult.data.anonKey,
+			configResult.value.url,
+			configResult.value.anonKey,
 			{
 				auth: {
 					persistSession: false, // CLI工具不需要持久化会话
@@ -71,12 +73,12 @@ export function getSupabaseClient(): Result<SupabaseClient<Database>, string> {
 		);
 
 		logger.debug('Supabase客户端初始化成功');
-		return Result.success(supabaseClient);
+		return Result.succeed(supabaseClient);
 	}
 	catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		logger.error(`Supabase客户端初始化失败: ${errorMessage}`);
-		return Result.failure(`Supabase客户端初始化失败: ${errorMessage}`);
+		return Result.fail(`Supabase客户端初始化失败: ${errorMessage}`);
 	}
 }
 
@@ -84,31 +86,31 @@ export function getSupabaseClient(): Result<SupabaseClient<Database>, string> {
  * 测试 Supabase 连接
  * @returns 连接测试结果
  */
-export async function testSupabaseConnection(): Promise<Result<boolean, string>> {
+export async function testSupabaseConnection(): Promise<Result.Result<boolean, string>> {
 	const clientResult = getSupabaseClient();
 	if (Result.isFailure(clientResult)) {
-		return Result.failure(clientResult.error);
+		return Result.fail(clientResult.error);
 	}
 
 	try {
 		// 简单的连接测试 - 尝试查询 teams 表
-		const { error } = await clientResult.data
+		const { error } = await clientResult.value
 			.from('teams')
 			.select('id')
 			.limit(1);
 
 		if (error) {
 			logger.error(`Supabase连接测试失败: ${error.message}`);
-			return Result.failure(`数据库连接失败: ${error.message}`);
+			return Result.fail(`数据库连接失败: ${error.message}`);
 		}
 
 		logger.debug('Supabase连接测试成功');
-		return Result.success(true);
+		return Result.succeed(true);
 	}
 	catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		logger.error(`Supabase连接测试异常: ${errorMessage}`);
-		return Result.failure(`连接测试异常: ${errorMessage}`);
+		return Result.fail(`连接测试异常: ${errorMessage}`);
 	}
 }
 
@@ -130,13 +132,13 @@ export async function withRetry<T>(
 	operation: () => Promise<T>,
 	maxRetries = 3,
 	retryDelay = 1000,
-): Promise<Result<T, string>> {
+): Promise<Result.Result<T, string>> {
 	let lastError: Error | null = null;
 
 	for (let attempt = 1; attempt <= maxRetries; attempt++) {
 		try {
 			const result = await operation();
-			return Result.success(result);
+			return Result.succeed(result);
 		}
 		catch (error) {
 			lastError = error instanceof Error ? error : new Error(String(error));
@@ -150,7 +152,7 @@ export async function withRetry<T>(
 
 	const errorMessage = lastError?.message ?? '未知错误';
 	logger.error(`数据库操作最终失败: ${errorMessage}`);
-	return Result.failure(`数据库操作失败: ${errorMessage}`);
+	return Result.fail(`数据库操作失败: ${errorMessage}`);
 }
 
 /**

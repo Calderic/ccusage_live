@@ -5,31 +5,32 @@
  * 成员管理、数据同步等功能。
  */
 
-import { nanoid } from 'nanoid';
-import { Result } from '@praha/byethrow';
-import os from 'node:os';
-import crypto from 'node:crypto';
+import type { SessionBlock } from '../_session-blocks.ts';
 import type {
 	CreateTeamRequest,
 	JoinTeamRequest,
 	Team,
-	TeamMember,
 	TeamAggregatedStats,
+	TeamMember,
 	UsageSession,
 } from './_team-types.ts';
+import crypto from 'node:crypto';
+import os from 'node:os';
+import { Result } from '@praha/byethrow';
+import { nanoid } from 'nanoid';
+import { getClaudePaths, loadSessionBlockData } from '../data-loader.ts';
+import { logger } from '../logger.ts';
 import {
 	createTeamRequestSchema,
-	joinTeamRequestSchema,
 	getMemberStatusIndicator,
 	getPreferredTimeDescription,
+	joinTeamRequestSchema,
 } from './_team-types.ts';
 import {
+	formatSupabaseError,
 	getSupabaseClient,
 	withRetry,
-	formatSupabaseError,
 } from './supabase-client.ts';
-import type { SessionBlock } from '../_session-blocks.ts';
-import { logger } from '../logger.ts';
 
 /**
  * 生成用户ID（基于机器标识和用户名）
@@ -44,7 +45,12 @@ function generateUserId(userName: string): string {
 		.digest('hex')
 		.substring(0, 8);
 
-	return `${machineId}-${userName.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+	const normalizedName = userName.toLowerCase()
+		.replace(/\s+/g, '') // Remove spaces
+		.replace(/\W/g, '') // Remove non-word characters but keep Chinese
+		|| crypto.createHash('sha256').update(userName).digest('hex').substring(0, 8);
+
+	return `${machineId}-${normalizedName}`;
 }
 
 /**
@@ -63,23 +69,23 @@ export class TeamService {
 	/**
 	 * 创建新车队
 	 */
-	async createTeam(request: CreateTeamRequest): Promise<Result<{ team: Team; member: TeamMember; code: string }, string>> {
+	async createTeam(request: CreateTeamRequest): Promise<Result.Result<{ team: Team; member: TeamMember; code: string }, string>> {
 		// 验证请求数据
 		const validationResult = createTeamRequestSchema.safeParse(request);
 		if (!validationResult.success) {
-			return Result.failure(`请求数据验证失败: ${validationResult.error.errors.map(e => e.message).join(', ')}`);
+			return Result.fail(`请求数据验证失败: ${validationResult.error.errors.map((e: any) => e.message).join(', ')}`);
 		}
 
 		const clientResult = getSupabaseClient();
 		if (Result.isFailure(clientResult)) {
-			return Result.failure(clientResult.error);
+			return Result.fail(clientResult.error);
 		}
 
-		const supabase = clientResult.data;
+		const supabase = clientResult.value;
 		const userId = generateUserId(request.user_name);
 		const teamCode = generateTeamCode();
 
-		return await withRetry(async () => {
+		return withRetry(async () => {
 			// 使用事务创建车队和初始成员
 			const { data: team, error: teamError } = await supabase
 				.from('teams')
@@ -124,22 +130,22 @@ export class TeamService {
 	/**
 	 * 加入车队
 	 */
-	async joinTeam(request: JoinTeamRequest): Promise<Result<{ team: Team; member: TeamMember }, string>> {
+	async joinTeam(request: JoinTeamRequest): Promise<Result.Result<{ team: Team; member: TeamMember }, string>> {
 		// 验证请求数据
 		const validationResult = joinTeamRequestSchema.safeParse(request);
 		if (!validationResult.success) {
-			return Result.failure(`请求数据验证失败: ${validationResult.error.errors.map(e => e.message).join(', ')}`);
+			return Result.fail(`请求数据验证失败: ${validationResult.error.errors.map((e: any) => e.message).join(', ')}`);
 		}
 
 		const clientResult = getSupabaseClient();
 		if (Result.isFailure(clientResult)) {
-			return Result.failure(clientResult.error);
+			return Result.fail(clientResult.error);
 		}
 
-		const supabase = clientResult.data;
+		const supabase = clientResult.value;
 		const userId = generateUserId(request.user_name);
 
-		return await withRetry(async () => {
+		return withRetry(async () => {
 			// 查找车队
 			const { data: team, error: teamError } = await supabase
 				.from('teams')
@@ -193,16 +199,16 @@ export class TeamService {
 	/**
 	 * 获取用户的车队列表
 	 */
-	async getUserTeams(userName: string): Promise<Result<Array<{ team: Team; member: TeamMember }>, string>> {
+	async getUserTeams(userName: string): Promise<Result.Result<Array<{ team: Team; member: TeamMember }>, string>> {
 		const clientResult = getSupabaseClient();
 		if (Result.isFailure(clientResult)) {
-			return Result.failure(clientResult.error);
+			return Result.fail(clientResult.error);
 		}
 
-		const supabase = clientResult.data;
+		const supabase = clientResult.value;
 		const userId = generateUserId(userName);
 
-		return await withRetry(async () => {
+		return withRetry(async () => {
 			const { data, error } = await supabase
 				.from('team_members')
 				.select(`
@@ -216,7 +222,7 @@ export class TeamService {
 				throw new Error(formatSupabaseError(error));
 			}
 
-			return data.map(item => ({
+			return data.map((item: any) => ({
 				team: item.teams as Team,
 				member: item as TeamMember,
 			}));
@@ -226,15 +232,15 @@ export class TeamService {
 	/**
 	 * 获取车队成员列表
 	 */
-	async getTeamMembers(teamId: string): Promise<Result<TeamMember[], string>> {
+	async getTeamMembers(teamId: string): Promise<Result.Result<TeamMember[], string>> {
 		const clientResult = getSupabaseClient();
 		if (Result.isFailure(clientResult)) {
-			return Result.failure(clientResult.error);
+			return Result.fail(clientResult.error);
 		}
 
-		const supabase = clientResult.data;
+		const supabase = clientResult.value;
 
-		return await withRetry(async () => {
+		return withRetry(async () => {
 			const { data, error } = await supabase
 				.from('team_members')
 				.select('*')
@@ -257,15 +263,15 @@ export class TeamService {
 		teamId: string,
 		userId: string,
 		sessionBlock: SessionBlock,
-	): Promise<Result<UsageSession, string>> {
+	): Promise<Result.Result<UsageSession, string>> {
 		const clientResult = getSupabaseClient();
 		if (Result.isFailure(clientResult)) {
-			return Result.failure(clientResult.error);
+			return Result.fail(clientResult.error);
 		}
 
-		const supabase = clientResult.data;
+		const supabase = clientResult.value;
 
-		return await withRetry(async () => {
+		return withRetry(async () => {
 			const usageSession: Omit<UsageSession, 'id' | 'created_at' | 'updated_at'> = {
 				team_id: teamId,
 				user_id: userId,
@@ -296,17 +302,17 @@ export class TeamService {
 	}
 
 	/**
-	 * 获取车队聚合统计数据
+	 * 获取车队聚合统计数据（混合本地和云端数据）
 	 */
-	async getTeamStats(teamId: string): Promise<Result<TeamAggregatedStats, string>> {
+	async getTeamStats(teamId: string, currentUserId?: string): Promise<Result.Result<TeamAggregatedStats, string>> {
 		const clientResult = getSupabaseClient();
 		if (Result.isFailure(clientResult)) {
-			return Result.failure(clientResult.error);
+			return Result.fail(clientResult.error);
 		}
 
-		const supabase = clientResult.data;
+		const supabase = clientResult.value;
 
-		return await withRetry(async () => {
+		return withRetry(async () => {
 			// 获取车队信息
 			const { data: team, error: teamError } = await supabase
 				.from('teams')
@@ -329,20 +335,36 @@ export class TeamService {
 				throw new Error(formatSupabaseError(membersError));
 			}
 
-			// 获取最近的使用会话
-			const { data: sessions, error: sessionsError } = await supabase
+			// 获取其他成员的活跃使用会话（从数据库）
+			const { data: otherMembersSessions, error: sessionsError } = await supabase
 				.from('usage_sessions')
 				.select('*')
 				.eq('team_id', teamId)
-				.gte('start_time', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // 最近24小时
+				.eq('is_active', true) // 只获取活跃的5小时窗口期
+				.neq('user_id', currentUserId || 'none') // 排除当前用户
 				.order('start_time', { ascending: false });
 
 			if (sessionsError) {
 				throw new Error(formatSupabaseError(sessionsError));
 			}
 
+			// 获取当前用户的本地数据
+			let currentUserSessions: any[] = [];
+			if (currentUserId) {
+				const localDataResult = await this.getCurrentUserLocalData(currentUserId);
+				if (Result.isSuccess(localDataResult)) {
+					currentUserSessions = localDataResult.value;
+				}
+				else {
+					logger.warn(`获取当前用户本地数据失败: ${localDataResult.error}`);
+				}
+			}
+
+			// 合并所有会话数据
+			const sessions = [...otherMembersSessions, ...currentUserSessions];
+
 			// 查找当前活跃会话
-			const activeSession = sessions.find(s => s.is_active);
+			const activeSession = sessions.find((s: any) => s.is_active);
 			let currentSession: SessionBlock | null = null;
 
 			if (activeSession) {
@@ -360,15 +382,15 @@ export class TeamService {
 			}
 
 			// 计算成员统计
-			const memberStats = members.map(member => {
-				const memberSessions = sessions.filter(s => s.user_id === member.user_id);
-				const totalTokens = memberSessions.reduce((sum, s) => 
-					sum + s.token_counts.inputTokens + s.token_counts.outputTokens + 
-					s.token_counts.cacheCreationInputTokens + s.token_counts.cacheReadInputTokens, 0);
-				const totalCost = memberSessions.reduce((sum, s) => sum + s.cost_usd, 0);
-				const isActive = memberSessions.some(s => s.is_active);
-				const lastActivity = memberSessions.length > 0 
-					? new Date(Math.max(...memberSessions.map(s => new Date(s.updated_at).getTime())))
+			const memberStats = members.map((member: any) => {
+				const memberSessions = sessions.filter((s: any) => s.user_id === member.user_id);
+				const totalTokens = memberSessions.reduce((sum: number, s: any) =>
+					sum + s.token_counts.inputTokens + s.token_counts.outputTokens
+					+ s.token_counts.cacheCreationInputTokens + s.token_counts.cacheReadInputTokens, 0);
+				const totalCost = memberSessions.reduce((sum: number, s: any) => sum + s.cost_usd, 0);
+				const isActive = memberSessions.some((s: any) => s.is_active);
+				const lastActivity = memberSessions.length > 0
+					? new Date(Math.max(...memberSessions.map((s: any) => new Date(s.updated_at).getTime())))
 					: undefined;
 
 				return {
@@ -384,11 +406,11 @@ export class TeamService {
 			});
 
 			// 计算总计
-			const totalTokens = sessions.reduce((sum, s) => 
-				sum + s.token_counts.inputTokens + s.token_counts.outputTokens + 
-				s.token_counts.cacheCreationInputTokens + s.token_counts.cacheReadInputTokens, 0);
-			const totalCost = sessions.reduce((sum, s) => sum + s.cost_usd, 0);
-			const activeMembersCount = memberStats.filter(m => m.is_active).length;
+			const totalTokens = sessions.reduce((sum: number, s: any) =>
+				sum + s.token_counts.inputTokens + s.token_counts.outputTokens
+				+ s.token_counts.cacheCreationInputTokens + s.token_counts.cacheReadInputTokens, 0);
+			const totalCost = sessions.reduce((sum: number, s: any) => sum + s.cost_usd, 0);
+			const activeMembersCount = memberStats.filter((m: any) => m.is_active).length;
 
 			// 计算燃烧率（基于活跃会话）
 			let burnRate: TeamAggregatedStats['burn_rate'] = null;
@@ -397,10 +419,10 @@ export class TeamService {
 				if (durationMinutes > 0) {
 					const tokensPerMinute = totalTokens / durationMinutes;
 					const costPerHour = (totalCost / durationMinutes) * 60;
-					
+
 					let indicator: 'HIGH' | 'MODERATE' | 'NORMAL' = 'NORMAL';
-					if (tokensPerMinute > 1000) indicator = 'HIGH';
-					else if (tokensPerMinute > 500) indicator = 'MODERATE';
+					if (tokensPerMinute > 1000) { indicator = 'HIGH'; }
+					else if (tokensPerMinute > 500) { indicator = 'MODERATE'; }
 
 					burnRate = {
 						tokens_per_minute: tokensPerMinute,
@@ -412,17 +434,17 @@ export class TeamService {
 
 			// 生成智能建议
 			const smartSuggestions: string[] = [];
-			
+
 			if (burnRate?.indicator === 'HIGH') {
 				smartSuggestions.push('当前使用频率较高，建议适当控制');
 			}
-			
+
 			if (activeMembersCount > 1) {
 				smartSuggestions.push(`当前有${activeMembersCount}位成员同时使用，注意协调`);
 			}
-			
-			const highUsageMembers = memberStats.filter(m => m.current_tokens > totalTokens * 0.4);
-			if (highUsageMembers.length > 0) {
+
+			const highUsageMembers = memberStats.filter((m: any) => m.current_tokens > totalTokens * 0.4);
+			if (highUsageMembers.length > 0 && highUsageMembers[0]) {
 				smartSuggestions.push(`${highUsageMembers[0].user_name}使用量较高，建议适当控制`);
 			}
 
@@ -450,16 +472,16 @@ export class TeamService {
 	/**
 	 * 离开车队
 	 */
-	async leaveTeam(teamId: string, userName: string): Promise<Result<boolean, string>> {
+	async leaveTeam(teamId: string, userName: string): Promise<Result.Result<boolean, string>> {
 		const clientResult = getSupabaseClient();
 		if (Result.isFailure(clientResult)) {
-			return Result.failure(clientResult.error);
+			return Result.fail(clientResult.error);
 		}
 
-		const supabase = clientResult.data;
+		const supabase = clientResult.value;
 		const userId = generateUserId(userName);
 
-		return await withRetry(async () => {
+		return withRetry(async () => {
 			const { error } = await supabase
 				.from('team_members')
 				.update({ is_active: false })
@@ -473,6 +495,57 @@ export class TeamService {
 			logger.info(`用户 ${userName} 离开车队 ${teamId}`);
 			return true;
 		});
+	}
+
+	/**
+	 * 获取当前用户的本地使用数据（当前5小时窗口期）
+	 * 每次都实时加载使用数据，现在使用全局共享的PricingFetcher来缓存模型价格
+	 */
+	private async getCurrentUserLocalData(userId: string): Promise<Result.Result<any[], string>> {
+		try {
+			const claudePaths = getClaudePaths();
+			if (claudePaths.length === 0) {
+				return Result.fail('未找到 Claude 数据目录');
+			}
+
+			// 加载本地会话数据，现在data-loader.ts内部会使用共享的PricingFetcher实例
+			// 这样可以实时获取token和费用数据，但复用模型价格缓存
+			const blocks = await loadSessionBlockData({
+				claudePath: claudePaths[0], // 使用第一个路径
+				mode: 'auto',
+				order: 'desc',
+			});
+
+			// 找到当前活跃的5小时窗口期
+			const currentActiveBlock = blocks.find(block => block.isActive);
+			if (!currentActiveBlock) {
+				// 如果没有活跃会话，返回空数据
+				return Result.succeed([]);
+			}
+
+			// 只返回当前活跃窗口期的数据
+			const session = {
+				team_id: '', // 这里需要团队ID，但在混合数据时会补充
+				user_id: userId,
+				session_id: currentActiveBlock.id,
+				start_time: currentActiveBlock.startTime.toISOString(),
+				end_time: currentActiveBlock.endTime.toISOString(),
+				is_active: currentActiveBlock.isActive,
+				token_counts: currentActiveBlock.tokenCounts,
+				cost_usd: currentActiveBlock.costUSD,
+				models: currentActiveBlock.models,
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
+				// 标记为本地数据
+				_isLocalData: true,
+			};
+
+			return Result.succeed([session]);
+		}
+		catch (error) {
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			return Result.fail(`获取本地数据失败: ${errorMsg}`);
+		}
 	}
 }
 
@@ -506,7 +579,7 @@ if (import.meta.vitest != null) {
 			expect(code1).toHaveLength(6);
 			expect(code2).toHaveLength(6);
 			expect(code1).not.toBe(code2); // 应该生成不同的码
-			expect(code1).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]+$/); // 只包含允许的字符
+			expect(code1).toMatch(/^[A-HJ-NP-Z2-9]+$/); // 只包含允许的字符
 		});
 
 		it('应该验证创建车队请求', async () => {

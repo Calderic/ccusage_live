@@ -5,19 +5,38 @@
  * 实时监控界面，显示多用户协作状态。
  */
 
+import type { TeamAggregatedStats } from './_team-types.ts';
 import process from 'node:process';
-import { delay } from '@jsr/std__async/delay';
+/**
+ * Simple delay function with abort signal support
+ */
+function delay(ms: number, options?: { signal?: AbortSignal }): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const timeout = setTimeout(resolve, ms);
+		
+		if (options?.signal) {
+			if (options.signal.aborted) {
+				clearTimeout(timeout);
+				reject(new Error('Operation was aborted'));
+				return;
+			}
+			
+			options.signal.addEventListener('abort', () => {
+				clearTimeout(timeout);
+				reject(new Error('Operation was aborted'));
+			});
+		}
+	});
+}
+import { Result } from '@praha/byethrow';
 import * as ansiEscapes from 'ansi-escapes';
 import pc from 'picocolors';
-import prettyMs from 'pretty-ms';
 import stringWidth from 'string-width';
-import { teamService } from './team-service.ts';
-import type { TeamAggregatedStats } from './_team-types.ts';
-import { TerminalManager } from '../_terminal-utils.ts';
-import { centerText, createProgressBar } from '../_terminal-utils.ts';
+import { centerText, createProgressBar, TerminalManager } from '../_terminal-utils.ts';
 import { formatCurrency, formatNumber } from '../_utils.ts';
 import { logger } from '../logger.ts';
-import { Result } from '@praha/byethrow';
+import { systemConfig } from './system-config.ts';
+import { teamService } from './team-service.ts';
 
 /**
  * 车队实时监控配置
@@ -26,6 +45,8 @@ type TeamLiveMonitoringConfig = {
 	teamId: string;
 	teamName: string;
 	refreshInterval: number;
+	tokenLimit?: number; // Token 限制
+	currentUserId?: string; // 当前用户ID，用于混合本地数据
 };
 
 /**
@@ -33,6 +54,19 @@ type TeamLiveMonitoringConfig = {
  * @param config 监控配置
  */
 export async function startTeamLiveMonitoring(config: TeamLiveMonitoringConfig): Promise<void> {
+	// 如果没有指定tokenLimit，从系统配置获取（只在启动时获取一次）
+	if (!config.tokenLimit) {
+		const tokenLimitResult = await systemConfig.getTokenLimit();
+		if (Result.isSuccess(tokenLimitResult)) {
+			config.tokenLimit = tokenLimitResult.value;
+		}
+		else {
+			// 如果获取失败，使用ClaudeMax计划的fallback值
+			config.tokenLimit = 100000000; // 100M tokens
+			logger.warn('Failed to get token limit from config, using fallback:', tokenLimitResult.error);
+		}
+	}
+
 	const terminal = new TerminalManager();
 	const abortController = new AbortController();
 	let lastRenderTime = 0;
@@ -69,15 +103,15 @@ export async function startTeamLiveMonitoring(config: TeamLiveMonitoringConfig):
 				continue;
 			}
 
-			// 获取车队统计数据
-			const statsResult = await teamService.getTeamStats(config.teamId);
-			
+			// 获取车队统计数据（混合本地和云端数据）
+			const statsResult = await teamService.getTeamStats(config.teamId, config.currentUserId);
+
 			if (Result.isFailure(statsResult)) {
 				await renderErrorState(terminal, `获取车队数据失败: ${statsResult.error}`, abortController.signal);
 				continue;
 			}
 
-			const stats = statsResult.data;
+			const stats = statsResult.value;
 
 			// 渲染车队监控界面
 			renderTeamLiveDisplay(terminal, stats, config);
@@ -171,7 +205,7 @@ function renderTeamLiveDisplay(
 		const startTime = session.startTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 		const endTime = session.endTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 		const remaining = Math.max(0, (session.endTime.getTime() - new Date().getTime()) / (1000 * 60));
-		const remainingStr = remaining > 60 
+		const remainingStr = remaining > 60
 			? `${Math.floor(remaining / 60)}h ${Math.floor(remaining % 60)}m`
 			: `${Math.floor(remaining)}m`;
 
@@ -184,21 +218,36 @@ function renderTeamLiveDisplay(
 	terminal.write(`${marginStr}├${'─'.repeat(boxWidth - 2)}┤\n`);
 	terminal.write(`${marginStr}│${' '.repeat(boxWidth - 2)}│\n`);
 
-	// 使用情况
-	const usageLabel = pc.bold('🔥 使用情况');
+	// 使用情况（显示当前5小时窗口期）
+	let timeRangeText = '当前窗口期';
+	if (stats.current_session) {
+		const startTime = stats.current_session.startTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+		const endTime = stats.current_session.endTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+		timeRangeText = `当前窗口期 (${startTime}-${endTime})`;
+	}
+	const usageLabel = pc.bold(`🔥 使用情况 - ${timeRangeText}`);
 	const usageLabelPadded = usageLabel + ' '.repeat(Math.max(0, boxWidth - 3 - stringWidth(usageLabel)));
 	terminal.write(`${marginStr}│ ${usageLabelPadded}│\n`);
 
-	// Token 使用进度条（假设限制为 200k tokens）
-	const tokenLimit = 200000;
-	const tokenPercent = (stats.total_tokens / tokenLimit) * 100;
+	// 获取当前用户的个人使用情况
+	const currentUser = config.currentUserId 
+		? stats.member_stats.find(member => member.user_id === config.currentUserId)
+		: stats.member_stats[0]; // 如果没有指定用户ID，使用第一个成员
+
+	// 使用个人数据而不是团队总数据
+	const personalTokens = currentUser?.current_tokens || 0;
+	const personalCost = currentUser?.current_cost || 0;
+
+	// Token 使用进度条（从配置或系统配置获取限制）
+	const tokenLimit = config.tokenLimit || 100000000; // ClaudeMax fallback: 100M
+	const tokenPercent = (personalTokens / tokenLimit) * 100;
 	let barColor = pc.green;
-	if (tokenPercent > 100) barColor = pc.red;
-	else if (tokenPercent > 80) barColor = pc.yellow;
+	if (tokenPercent > 100) { barColor = pc.red; }
+	else if (tokenPercent > 80) { barColor = pc.yellow; }
 
 	const barWidth = Math.min(40, boxWidth - 20);
 	const tokenBar = createProgressBar(
-		stats.total_tokens,
+		personalTokens,
 		tokenLimit,
 		barWidth,
 		{
@@ -210,15 +259,19 @@ function renderTeamLiveDisplay(
 		},
 	);
 
-	const tokenInfo = `TOKEN  ${tokenBar} ${tokenPercent.toFixed(1)}% (${formatTokensShort(stats.total_tokens)}/${formatTokensShort(tokenLimit)})`;
+	const tokenInfo = `TOKEN  ${tokenBar} ${tokenPercent.toFixed(1)}% (${formatTokensShort(personalTokens)}/${formatTokensShort(tokenLimit)})`;
 	const tokenInfoPadded = tokenInfo + ' '.repeat(Math.max(0, boxWidth - 3 - stringWidth(tokenInfo)));
 	terminal.write(`${marginStr}│ ${tokenInfoPadded}│\n`);
 
-	// 费用和燃烧率
-	const burnRateText = stats.burn_rate 
-		? `${formatNumber(Math.round(stats.burn_rate.tokens_per_minute))} token/min ${getBurnRateIndicator(stats.burn_rate.indicator)}`
+	// 费用和个人燃烧率（从个人数据推算）
+	const personalBurnRate = stats.burn_rate && currentUser
+		? Math.round(stats.burn_rate.tokens_per_minute * (personalTokens / Math.max(stats.total_tokens, 1)))
+		: null;
+	
+	const burnRateText = personalBurnRate
+		? `${formatTokensShort(personalBurnRate)} token/min ${getBurnRateIndicator(stats.burn_rate?.indicator || 'NORMAL')}`
 		: 'N/A';
-	const costInfo = `费用: ${formatCurrency(stats.total_cost)} / 燃烧率: ${burnRateText}`;
+	const costInfo = `个人费用: ${formatCurrency(personalCost)} / 燃烧率: ${burnRateText}`;
 	const costInfoPadded = costInfo + ' '.repeat(Math.max(0, boxWidth - 3 - stringWidth(costInfo)));
 	terminal.write(`${marginStr}│ ${costInfoPadded}│\n`);
 
@@ -298,18 +351,31 @@ function renderCompactTeamDisplay(
 
 	terminal.write(`${'─'.repeat(width)}\n`);
 
+	// 获取当前用户的个人使用情况
+	const currentUser = config.currentUserId 
+		? stats.member_stats.find(member => member.user_id === config.currentUserId)
+		: stats.member_stats[0]; // 如果没有指定用户ID，使用第一个成员
+
+	// 使用个人数据而不是团队总数据
+	const personalTokens = currentUser?.current_tokens || 0;
+	const personalCost = currentUser?.current_cost || 0;
+
 	// Token 使用
-	const tokenLimit = 200000;
-	const tokenPercent = (stats.total_tokens / tokenLimit) * 100;
+	const tokenLimit = config.tokenLimit || 100000000; // ClaudeMax fallback: 100M
+	const tokenPercent = (personalTokens / tokenLimit) * 100;
 	const status = tokenPercent > 100 ? pc.red('超限') : tokenPercent > 80 ? pc.yellow('警告') : pc.green('正常');
-	terminal.write(`Tokens: ${formatTokensShort(stats.total_tokens)}/${formatTokensShort(tokenLimit)} ${status}\n`);
+	terminal.write(`个人Tokens: ${formatTokensShort(personalTokens)}/${formatTokensShort(tokenLimit)} ${status}\n`);
 
 	// 费用
-	terminal.write(`费用: ${formatCurrency(stats.total_cost)}\n`);
+	terminal.write(`个人费用: ${formatCurrency(personalCost)}\n`);
 
-	// 燃烧率
-	if (stats.burn_rate) {
-		terminal.write(`速率: ${formatNumber(Math.round(stats.burn_rate.tokens_per_minute))}/分钟\n`);
+	// 个人燃烧率（从个人数据推算）
+	const personalBurnRate = stats.burn_rate && currentUser
+		? Math.round(stats.burn_rate.tokens_per_minute * (personalTokens / Math.max(stats.total_tokens, 1)))
+		: null;
+	
+	if (personalBurnRate) {
+		terminal.write(`个人速率: ${formatTokensShort(personalBurnRate)}/分钟\n`);
 	}
 
 	terminal.write(`${'─'.repeat(width)}\n`);

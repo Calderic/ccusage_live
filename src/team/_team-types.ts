@@ -5,8 +5,8 @@
  * 基于现有的 SessionBlock 和 LoadedUsageEntry 结构扩展。
  */
 
+import type { SessionBlock } from '../_session-blocks.ts';
 import { z } from 'zod';
-import type { LoadedUsageEntry, SessionBlock } from '../_session-blocks.ts';
 
 /**
  * 车队基本信息
@@ -157,15 +157,15 @@ export function getPreferredTimeDescription(hours?: number[]): string {
 	const nightHours = hours.filter(h => h >= 0 && h < 6);
 
 	const periods = [];
-	if (morningHours.length > 0) periods.push('上午');
-	if (afternoonHours.length > 0) periods.push('下午');
-	if (eveningHours.length > 0) periods.push('晚上');
-	if (nightHours.length > 0) periods.push('深夜');
+	if (morningHours.length > 0) { periods.push('上午'); }
+	if (afternoonHours.length > 0) { periods.push('下午'); }
+	if (eveningHours.length > 0) { periods.push('晚上'); }
+	if (nightHours.length > 0) { periods.push('深夜'); }
 
-	if (periods.length === 0) return '未设置';
-	if (periods.length >= 3) return '全天使用';
+	if (periods.length === 0) { return '未设置'; }
+	if (periods.length === 4) { return '全天使用'; }
 
-	return periods.join('、') + '使用偏好';
+	return `${periods.join('、')}使用偏好`;
 }
 
 /**

@@ -15,24 +15,42 @@ import { modelPricingSchema } from './_types.ts';
  * @throws Will throw an error if the fetch operation fails.
  */
 export async function prefetchClaudePricing(): Promise<Record<string, ModelPricing>> {
-	const response = await fetch(LITELLM_PRICING_URL);
-	if (!response.ok) {
-		throw new Error(`Failed to fetch pricing data: ${response.statusText}`);
-	}
+	try {
+		// 增加20秒超时，优化网络请求
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 20000); // 20秒超时
 
-	const data = await response.json() as Record<string, unknown>;
+		const response = await fetch(LITELLM_PRICING_URL, {
+			signal: controller.signal,
+			headers: {
+				'User-Agent': 'ccusage-cli/1.0',
+			},
+		});
 
-	const prefetchClaudeData: Record<string, ModelPricing> = {};
+		clearTimeout(timeoutId);
 
-	// Cache all models that start with 'claude-'
-	for (const [modelName, modelData] of Object.entries(data)) {
-		if (modelName.startsWith('claude-') && modelData != null && typeof modelData === 'object') {
-			const parsed = modelPricingSchema.safeParse(modelData);
-			if (parsed.success) {
-				prefetchClaudeData[modelName] = parsed.data;
+		if (!response.ok) {
+			throw new Error(`Failed to fetch pricing data: HTTP ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json() as Record<string, unknown>;
+
+		const prefetchClaudeData: Record<string, ModelPricing> = {};
+
+		// Cache all models that start with 'claude-'
+		for (const [modelName, modelData] of Object.entries(data)) {
+			if (modelName.startsWith('claude-') && modelData != null && typeof modelData === 'object') {
+				const parsed = modelPricingSchema.safeParse(modelData);
+				if (parsed.success) {
+					prefetchClaudeData[modelName] = parsed.data;
+				}
 			}
 		}
-	}
 
-	return prefetchClaudeData;
+		return prefetchClaudeData;
+	}
+	catch (error) {
+		// 网络错误时抛出，让调用者处理
+		throw new Error(`Failed to prefetch Claude pricing: ${error instanceof Error ? error.message : String(error)}`);
+	}
 }

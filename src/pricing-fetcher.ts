@@ -284,7 +284,7 @@ if (import.meta.vitest != null) {
 				}
 
 				expect(fetcherDisposed).toBe(true);
-			});
+			}, 15000);
 
 			it('should calculate costs directly with model name', async () => {
 				using fetcher = new PricingFetcher();

@@ -40,13 +40,15 @@ ccusage team list
 ### 核心表
 
 #### `teams` - 车队表
+
 - `id`: 车队唯一标识
 - `name`: 车队名称 (1-50字符)
 - `code`: 6位邀请码 (大写字母和数字)
 - `created_at`: 创建时间
 - `settings`: 车队设置 (JSON)
 
-#### `team_members` - 车队成员表  
+#### `team_members` - 车队成员表
+
 - `id`: 成员记录唯一标识
 - `team_id`: 所属车队ID
 - `user_name`: 用户显示名称 (1-30字符)
@@ -56,6 +58,7 @@ ccusage team list
 - `settings`: 个人设置 (时区、偏好时段等)
 
 #### `usage_sessions` - 使用会话表
+
 - `id`: 会话记录唯一标识
 - `team_id`: 所属车队ID
 - `user_id`: 用户标识
@@ -69,6 +72,7 @@ ccusage team list
 - `created_at/updated_at`: 创建/更新时间
 
 #### `team_live_status` - 车队实时状态表
+
 - `team_id`: 车队ID（主键）
 - `active_session_id`: 当前活跃会话ID
 - `active_members`: 活跃成员列表 (JSON)
@@ -80,9 +84,11 @@ ccusage team list
 ### 视图
 
 #### `team_stats` - 车队统计视图
+
 提供车队的聚合统计信息，包括成员数量、Token使用量、总费用等。
 
 #### `member_activity` - 成员活跃度视图
+
 显示每个成员的活跃度统计，包括会话数量、Token使用量、最后活动时间等。
 
 ## 安全设置
@@ -99,7 +105,7 @@ DROP POLICY IF EXISTS "Allow all operations on teams" ON teams;
 CREATE POLICY "Users can only access their teams" ON teams
     FOR ALL USING (
         id IN (
-            SELECT team_id FROM team_members 
+            SELECT team_id FROM team_members
             WHERE user_id = current_setting('request.jwt.claims', true)::json->>'user_id'
         )
     );
@@ -108,6 +114,7 @@ CREATE POLICY "Users can only access their teams" ON teams
 ### 数据验证
 
 数据库层面已添加多种约束：
+
 - 车队名称长度限制 (1-50字符)
 - 邀请码格式验证 (6位大写字母数字)
 - Token数量非负验证
@@ -119,6 +126,7 @@ CREATE POLICY "Users can only access their teams" ON teams
 ### 索引策略
 
 已创建以下索引以优化常用查询：
+
 - `teams.code` - 快速邀请码查找
 - `team_members.team_id` - 车队成员查询
 - `team_members.user_id` - 用户车队查询
@@ -139,13 +147,13 @@ CREATE POLICY "Users can only access their teams" ON teams
 
 ```sql
 -- 清理30天前的非活跃使用会话
-DELETE FROM usage_sessions 
-WHERE is_active = false 
+DELETE FROM usage_sessions
+WHERE is_active = false
   AND updated_at < NOW() - INTERVAL '30 days';
 
 -- 清理已离开车队的成员记录（保留90天）
-DELETE FROM team_members 
-WHERE is_active = false 
+DELETE FROM team_members
+WHERE is_active = false
   AND joined_at < NOW() - INTERVAL '90 days';
 ```
 
@@ -160,10 +168,12 @@ WHERE is_active = false
 ### 常见问题
 
 1. **连接失败**
+
    - 检查 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY` 环境变量
    - 确认 Supabase 项目状态正常
 
 2. **权限错误**
+
    - 检查 RLS 策略设置
    - 确认 API Key 权限
 
@@ -187,6 +197,7 @@ ccusage team create "测试车队"
 当前 Schema 版本: `1.0.0`
 
 升级步骤：
+
 1. 备份现有数据
 2. 运行新版本迁移脚本
 3. 验证数据完整性

@@ -20,7 +20,12 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { toArray } from '@antfu/utils';
-import { unreachable } from '@core/errorutil';
+/**
+ * TypeScript exhaustiveness helper
+ */
+function unreachable(value: never): never {
+	throw new Error(`Unreachable code reached with value: ${String(value)}`);
+}
 import { Result } from '@praha/byethrow';
 import { groupBy, uniq } from 'es-toolkit'; // TODO: after node20 is deprecated, switch to native Object.groupBy
 import { sort } from 'fast-sort';
@@ -58,6 +63,26 @@ import { logger } from './logger.ts';
 import {
 	PricingFetcher,
 } from './pricing-fetcher.ts';
+
+// 全局共享的PricingFetcher实例，用于缓存模型价格，避免重复的LiteLLM API调用
+// 只缓存价格信息，不影响实时的token使用量和费用计算
+let sharedPricingFetcher: PricingFetcher | null = null;
+
+function getSharedPricingFetcher(offline?: boolean): PricingFetcher {
+	if (!sharedPricingFetcher) {
+		sharedPricingFetcher = new PricingFetcher(offline);
+	}
+	return sharedPricingFetcher;
+}
+
+/**
+ * 清理全局共享的PricingFetcher缓存（用于强制刷新价格数据）
+ */
+export function clearGlobalPricingCache(): void {
+	if (sharedPricingFetcher) {
+		sharedPricingFetcher.clearCache();
+	}
+}
 
 /**
  * Get all Claude data directories to search for usage data
@@ -740,8 +765,9 @@ export async function loadDailyUsageData(
 	// Fetch pricing data for cost calculation only when needed
 	const mode = options?.mode ?? 'auto';
 
-	// Use PricingFetcher with using statement for automatic cleanup
-	using fetcher = mode === 'display' ? null : new PricingFetcher(options?.offline);
+	// Use shared PricingFetcher to cache pricing data and avoid repeated LiteLLM API calls
+	// Note: Don't use 'using' statement as it will dispose and clear cache after each call
+	const fetcher = mode === 'display' ? null : getSharedPricingFetcher(options?.offline);
 
 	// Track processed message+request combinations for deduplication
 	const processedHashes = new Set<string>();
@@ -895,8 +921,9 @@ export async function loadSessionData(
 	// Fetch pricing data for cost calculation only when needed
 	const mode = options?.mode ?? 'auto';
 
-	// Use PricingFetcher with using statement for automatic cleanup
-	using fetcher = mode === 'display' ? null : new PricingFetcher(options?.offline);
+	// Use shared PricingFetcher to cache pricing data and avoid repeated LiteLLM API calls
+	// Note: Don't use 'using' statement as it will dispose and clear cache after each call
+	const fetcher = mode === 'display' ? null : getSharedPricingFetcher(options?.offline);
 
 	// Track processed message+request combinations for deduplication
 	const processedHashes = new Set<string>();
@@ -1159,8 +1186,9 @@ export async function loadSessionBlockData(
 	// Fetch pricing data for cost calculation only when needed
 	const mode = options?.mode ?? 'auto';
 
-	// Use PricingFetcher with using statement for automatic cleanup
-	using fetcher = mode === 'display' ? null : new PricingFetcher(options?.offline);
+	// Use shared PricingFetcher to cache pricing data and avoid repeated LiteLLM API calls
+	// Note: Don't use 'using' statement as it will dispose and clear cache after each call
+	const fetcher = mode === 'display' ? null : getSharedPricingFetcher(options?.offline);
 
 	// Track processed message+request combinations for deduplication
 	const processedHashes = new Set<string>();
