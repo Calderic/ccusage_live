@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import prompts from 'prompts';
 import { logger } from '../logger.ts';
 import { systemConfig } from '../team/system-config.ts';
+import { performUpdateCheck } from '../update-checker.ts';
 import { blocksCommand } from './blocks.ts';
 import { dailyCommand } from './daily.ts';
 import { monthlyCommand } from './monthly.ts';
@@ -129,6 +130,22 @@ const USAGE_MENU_CHOICES: MenuChoice[] = [
 		title: `${pc.yellow('●')} ${pc.bold('计费块用量')}`,
 		description: pc.gray('查看5小时计费周期使用量'),
 		value: 'blocks',
+	},
+	{
+		title: `${pc.dim('◀')} ${pc.dim('返回主菜单')}`,
+		description: pc.gray('返回上级菜单'),
+		value: 'back',
+	},
+];
+
+/**
+ * 系统工具菜单选项
+ */
+const TOOLS_MENU_CHOICES: MenuChoice[] = [
+	{
+		title: `${pc.green('●')} ${pc.bold('检查更新')}`,
+		description: pc.gray('检查npm上是否有可用的软件更新'),
+		value: 'update',
 	},
 	{
 		title: `${pc.dim('◀')} ${pc.dim('返回主菜单')}`,
@@ -465,6 +482,53 @@ async function handleUsageMenu(): Promise<void> {
 }
 
 /**
+ * 处理系统工具菜单
+ */
+async function handleToolsMenu(): Promise<void> {
+	while (true) {
+		const choice = await showMenu(TOOLS_MENU_CHOICES, '选择系统工具');
+
+		if (!choice || choice === 'back') {
+			break;
+		}
+
+		try {
+			switch (choice) {
+				case 'update':
+					clearScreen();
+					showHeader();
+					console.log(`\n${pc.cyan('┌──')} ${pc.bold('检查更新')} ${pc.cyan('──┐')}\n`);
+
+					await performUpdateCheck('ccusage-live', false);
+
+					// 操作完成后暂停，让用户查看结果
+					console.log(`\n${pc.cyan('└──')} ${pc.dim('操作完成')} ${pc.cyan('──┘')}`);
+					await prompts({
+						type: 'confirm',
+						name: 'continue',
+						message: pc.gray('按回车键返回菜单'),
+						initial: true,
+					});
+					break;
+				default:
+					logger.warn(`未知选项: ${choice}`);
+			}
+		}
+		catch (error) {
+			logger.error(`执行工具时出错: ${error}`);
+
+			// 错误后暂停，让用户查看错误信息
+			await prompts({
+				type: 'confirm',
+				name: 'continue',
+				message: pc.gray('按回车键返回菜单'),
+				initial: true,
+			});
+		}
+	}
+}
+
+/**
  * 交互式菜单主函数
  */
 export async function interactiveCommand(): Promise<void> {
@@ -492,21 +556,7 @@ export async function interactiveCommand(): Promise<void> {
 				await handleUsageMenu();
 				break;
 			case 'tools':
-				clearScreen();
-				showHeader();
-				console.log(`\n${pc.cyan('┌──')} ${pc.bold('系统工具')} ${pc.cyan('──┐')}`);
-				console.log(`${pc.cyan('│')}`);
-				console.log(`${pc.yellow('⚠️')} ${pc.bold('开发中...')}`);
-				console.log(`${pc.gray('更多高级工具正在开发中，敬请期待！')}`);
-
-				// 操作完成后暂停，让用户查看结果
-				console.log(`\n${pc.cyan('└──')} ${pc.dim('操作完成')} ${pc.cyan('──┘')}`);
-				await prompts({
-					type: 'confirm',
-					name: 'continue',
-					message: pc.gray('按回车键返回菜单'),
-					initial: true,
-				});
+				await handleToolsMenu();
 				break;
 		}
 	}

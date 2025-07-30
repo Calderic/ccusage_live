@@ -16,6 +16,7 @@ import {
 	teamLiveCommand,
 	teamMembersCommand,
 } from './team.ts';
+import { updateCommand } from './update.ts';
 
 /**
  * Map of available CLI subcommands
@@ -27,6 +28,7 @@ subCommands.set('session', sessionCommand);
 subCommands.set('blocks', blocksCommand);
 subCommands.set('mcp', mcpCommand);
 subCommands.set('team', teamCommand);
+subCommands.set('update', updateCommand);
 
 // 车队子命令
 subCommands.set('team create', teamCreateCommand);

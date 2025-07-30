@@ -7,36 +7,44 @@
 
 import type { TeamAggregatedStats } from './_team-types.ts';
 import process from 'node:process';
+import { Result } from '@praha/byethrow';
+import * as ansiEscapes from 'ansi-escapes';
+import pc from 'picocolors';
+import stringWidth from 'string-width';
+import { centerText, createProgressBar, TerminalManager } from '../_terminal-utils.ts';
+import { formatCurrency } from '../_utils.ts';
+import { logger } from '../logger.ts';
+import { systemConfig } from './system-config.ts';
+import { teamService } from './team-service.ts';
 /**
  * Simple delay function with abort signal support
  */
-function delay(ms: number, options?: { signal?: AbortSignal }): Promise<void> {
+async function delay(ms: number, options?: { signal?: AbortSignal }): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const timeout = setTimeout(resolve, ms);
-		
+
 		if (options?.signal) {
 			if (options.signal.aborted) {
 				clearTimeout(timeout);
 				reject(new Error('Operation was aborted'));
 				return;
 			}
-			
-			options.signal.addEventListener('abort', () => {
+
+			// 使用控制器来管理监听器，避免内存泄漏
+			const controller = new AbortController();
+			const cleanup = () => {
 				clearTimeout(timeout);
+				controller.abort(); // 清理监听器
 				reject(new Error('Operation was aborted'));
+			};
+
+			options.signal.addEventListener('abort', cleanup, {
+				signal: controller.signal,
+				once: true, // 只执行一次
 			});
 		}
 	});
 }
-import { Result } from '@praha/byethrow';
-import * as ansiEscapes from 'ansi-escapes';
-import pc from 'picocolors';
-import stringWidth from 'string-width';
-import { centerText, createProgressBar, TerminalManager } from '../_terminal-utils.ts';
-import { formatCurrency, formatNumber } from '../_utils.ts';
-import { logger } from '../logger.ts';
-import { systemConfig } from './system-config.ts';
-import { teamService } from './team-service.ts';
 
 /**
  * 车队实时监控配置
@@ -69,6 +77,12 @@ export async function startTeamLiveMonitoring(config: TeamLiveMonitoringConfig):
 
 	const terminal = new TerminalManager();
 	const abortController = new AbortController();
+
+	// 设置更高的最大监听器数量以避免警告
+	if ('setMaxListeners' in abortController.signal && typeof abortController.signal.setMaxListeners === 'function') {
+		(abortController.signal as any).setMaxListeners(50);
+	}
+
 	let lastRenderTime = 0;
 	const minRenderInterval = 1000; // 最小渲染间隔 1 秒
 
@@ -230,7 +244,7 @@ function renderTeamLiveDisplay(
 	terminal.write(`${marginStr}│ ${usageLabelPadded}│\n`);
 
 	// 获取当前用户的个人使用情况
-	const currentUser = config.currentUserId 
+	const currentUser = config.currentUserId
 		? stats.member_stats.find(member => member.user_id === config.currentUserId)
 		: stats.member_stats[0]; // 如果没有指定用户ID，使用第一个成员
 
@@ -267,7 +281,7 @@ function renderTeamLiveDisplay(
 	const personalBurnRate = stats.burn_rate && currentUser
 		? Math.round(stats.burn_rate.tokens_per_minute * (personalTokens / Math.max(stats.total_tokens, 1)))
 		: null;
-	
+
 	const burnRateText = personalBurnRate
 		? `${formatTokensShort(personalBurnRate)} token/min ${getBurnRateIndicator(stats.burn_rate?.indicator || 'NORMAL')}`
 		: 'N/A';
@@ -284,9 +298,36 @@ function renderTeamLiveDisplay(
 	const membersLabelPadded = membersLabel + ' '.repeat(Math.max(0, boxWidth - 3 - stringWidth(membersLabel)));
 	terminal.write(`${marginStr}│ ${membersLabelPadded}│\n`);
 
+	// 计算成员信息的对齐宽度
+	const maxNameWidth = Math.max(...stats.member_stats.slice(0, 5).map(m => stringWidth(m.user_name)));
+	const nameWidth = Math.min(maxNameWidth, 12); // 限制最大宽度
+	const tokenWidth = 8; // tokens显示宽度
+	const costWidth = 7; // 费用显示宽度（如$12.34）
+	const statusWidth = 4; // 状态显示宽度
+
 	for (const member of stats.member_stats.slice(0, 5)) { // 最多显示5个成员
-		const statusText = member.is_active ? '[活跃]' : '[空闲]';
-		const memberInfo = `${member.status_indicator} ${member.user_name}    ${statusText} ${formatTokensShort(member.current_tokens)} tokens  ${member.preferred_time}`;
+		const statusIcon = member.is_active ? pc.green('●') : pc.gray('○');
+		const statusText = member.is_active ? pc.green('活跃') : pc.gray('空闲');
+		const statusPadded = statusText.padEnd(statusWidth);
+
+		// 用户名对齐
+		const userName = member.user_name.length > nameWidth
+			? `${member.user_name.substring(0, nameWidth - 1)}…`
+			: member.user_name;
+		const userNamePadded = userName.padEnd(nameWidth);
+
+		// Token数量右对齐
+		const tokenText = formatTokensShort(member.current_tokens);
+		const tokenPadded = tokenText.padStart(tokenWidth);
+
+		// 费用右对齐
+		const costText = formatCurrency(member.current_cost);
+		const costPadded = costText.padStart(costWidth);
+
+		// 时间偏好
+		const timePreference = member.preferred_time || '随时';
+
+		const memberInfo = `${statusIcon} ${userNamePadded} │ ${statusPadded} │ ${tokenPadded} tokens │ ${costPadded} │ ${timePreference}`;
 		const memberInfoPadded = memberInfo + ' '.repeat(Math.max(0, boxWidth - 3 - stringWidth(memberInfo)));
 		terminal.write(`${marginStr}│ ${memberInfoPadded}│\n`);
 	}
@@ -352,7 +393,7 @@ function renderCompactTeamDisplay(
 	terminal.write(`${'─'.repeat(width)}\n`);
 
 	// 获取当前用户的个人使用情况
-	const currentUser = config.currentUserId 
+	const currentUser = config.currentUserId
 		? stats.member_stats.find(member => member.user_id === config.currentUserId)
 		: stats.member_stats[0]; // 如果没有指定用户ID，使用第一个成员
 
@@ -373,7 +414,7 @@ function renderCompactTeamDisplay(
 	const personalBurnRate = stats.burn_rate && currentUser
 		? Math.round(stats.burn_rate.tokens_per_minute * (personalTokens / Math.max(stats.total_tokens, 1)))
 		: null;
-	
+
 	if (personalBurnRate) {
 		terminal.write(`个人速率: ${formatTokensShort(personalBurnRate)}/分钟\n`);
 	}
@@ -381,9 +422,25 @@ function renderCompactTeamDisplay(
 	terminal.write(`${'─'.repeat(width)}\n`);
 
 	// 成员状态（紧凑显示）
+	const maxCompactNameWidth = Math.max(...stats.member_stats.slice(0, 3).map(m => stringWidth(m.user_name)));
+	const compactNameWidth = Math.min(maxCompactNameWidth, Math.floor(width * 0.3)); // 占屏幕30%宽度
+	const compactTokenWidth = Math.floor(width * 0.2); // token占20%宽度
+	const compactCostWidth = Math.floor(width * 0.15); // 费用占15%宽度
+
 	for (const member of stats.member_stats.slice(0, 3)) {
-		const status = member.is_active ? pc.green('●') : pc.gray('○');
-		terminal.write(`${status} ${member.user_name}: ${formatTokensShort(member.current_tokens)}\n`);
+		const statusIcon = member.is_active ? pc.green('●') : pc.gray('○');
+		const userName = member.user_name.length > compactNameWidth
+			? `${member.user_name.substring(0, compactNameWidth - 1)}…`
+			: member.user_name;
+		const userNamePadded = userName.padEnd(compactNameWidth);
+
+		const tokenText = formatTokensShort(member.current_tokens);
+		const tokenPadded = tokenText.padStart(compactTokenWidth);
+
+		const costText = formatCurrency(member.current_cost);
+		const costPadded = costText.padStart(compactCostWidth);
+
+		terminal.write(`${statusIcon} ${userNamePadded} ${tokenPadded} ${costPadded}\n`);
 	}
 
 	// 底部
